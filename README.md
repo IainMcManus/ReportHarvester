@@ -8,7 +8,8 @@ Requirements
 
 You will need the AutoIngestion.Class from Apple. The AutoIngestion.Class cannot be redistributed so you must download it yourself. The two files (AutoIngestion.Class and AutoIngestion.properties) should be placed in the same folder as the HarvestReports.py 
 
-The AutoIngestion tool can be downloaded by following the instructions in the [iTunes Connect Sales and Trends Guide][http://www.apple.com/itunesnews/docs/AppStoreReportingInstructions.pdf]
+The AutoIngestion tool can be downloaded by following the instructions in the [iTunes Connect Sales and Trends Guide][itunes-guide]
+[itunes-guide]: [http://www.apple.com/itunesnews/docs/AppStoreReportingInstructions.pdf]
 
 ReportHarvester uses a number of third party libraries. You will need to install the following:
 
