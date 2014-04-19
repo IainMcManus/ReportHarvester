@@ -742,7 +742,7 @@ def emailReportForToday(downloadedFiles, perSKUData):
             s.starttls()  
             s.ehlo()
         s.login(emailConfig["Username"], emailConfig["Password"])  
-        s.sendmail(emailMessage["From"], [emailMessage["To"]], emailMessage.as_string())
+        s.sendmail(emailMessage["From"], emailMessage["To"], emailMessage.as_string())
     except (smtplib.SMTPServerDisconnected):
         print "Connection unexpectedly closed: [Errno 54] Connection reset by peer"
         sys.exit(-1)
