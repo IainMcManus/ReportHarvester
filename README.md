@@ -3,6 +3,17 @@ Introduction
 
 ReportHarvester is a Python based tool for downloading and analysing sales data from iTunes Connect.
 
+Report Harvester will analyse the downloaded sales data and provide the following information per each application:
+ * Number of installs (total and per version)
+ * Number of upgrades (total and per version)
+ * Number of promo codes used (total and per version)
+ * Proceeds earned (total and per version)
+ * Number of users running the latest version
+ * Percentage of users retained between versions
+ * Graph showing geographic distribution of sales for newly downloaded data and for all time
+ * Graph showing sales and updates for the last 30 days
+ * Graph showing proceeds for the last 30 days
+
 Requirements
 ===============
 
@@ -94,4 +105,6 @@ Download the last 5 days of data and generate a report
 Final Remarks
 ===============
 
-Report Harvester has been tested on OS X 10.9 using Python 2.7.6. The only email provider it has been used with has been Gmail.
+Report Harvester has been tested on OS X 10.9 using Python 2.7.6. The only email provider it has been used with has been Gmail. It has been tested using a Gmail account with two-factor authentication enabled and using application specific passwords.
+
+I have Report Harvester setup to run periodically on a Mac Mini Server with it configured to email me the reports. 
