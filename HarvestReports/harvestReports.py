@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# Harvest Reports v0.1
+# Harvest Reports v0.1.1
 # Copyright (c) 2014 Iain McManus. All rights reserved.
 #
 # Harvest Reports is a wrapper around Apple's AutoIngestion Java Class.
@@ -295,6 +295,8 @@ class SKUData:
         self.versions.sort()
 
         # fill in any missing version data
+        numPreviousVersion = 0
+        self.userRetentionByVersion = dict()
         for version in self.versions:
             if not version in self.unitsByVersion:
                 self.unitsByVersion.update({version : 0})
@@ -304,6 +306,12 @@ class SKUData:
                 self.proceedsByVersion.update({version : 0.0})
             if not version in self.promoCodesByVersion:
                 self.promoCodesByVersion.update({version : 0})
+                
+            if numPreviousVersion > 0:
+                proportionRetained = float(self.updatesByVersion[version]) / float(numPreviousVersion)
+                self.userRetentionByVersion.update({version : proportionRetained})
+                
+            numPreviousVersion += self.unitsByVersion[version]
         
         # calculate the number on old versions
         self.numOnOldVersions = self.unitsTotal
@@ -333,18 +341,18 @@ class SKUData:
 
         report += "<p><h2>Version Breakdown</h2></p>"
         report += "<ul>"
+        
         for version in reversed(self.versions):
             report += "<li><b>{version}</b>".format(version=version)
             report += "<ul>"
             
-            if version in self.unitsByVersion:
-                report += "<li>{sold:6} units sold</li>".format(sold=self.unitsByVersion[version])
-            if version in self.updatesByVersion:
-                report += "<li>{updates:6} installs updated to this version</li>".format(updates=self.updatesByVersion[version])
-            if version in self.promoCodesByVersion:
-                report += "<li>{promoCodes:6} promo codes used for this version</li>".format(promoCodes=self.promoCodesByVersion[version])
-            if version in self.proceedsByVersion:
-                report += "<li>{proceeds:6.02f} earned from this version</li>".format(proceeds=self.proceedsByVersion[version])
+            report += "<li>{sold:6} units sold</li>".format(sold=self.unitsByVersion[version])
+            report += "<li>{updates:6} installs updated to this version</li>".format(updates=self.updatesByVersion[version])
+            report += "<li>{promoCodes:6} promo codes used for this version</li>".format(promoCodes=self.promoCodesByVersion[version])
+            report += "<li>{proceeds:6.02f} earned from this version</li>".format(proceeds=self.proceedsByVersion[version])
+            
+            if version in self.userRetentionByVersion:
+                report += "<li>{retainedPct:3.1f}% of users upgraded to this version</li>".format(retainedPct=self.userRetentionByVersion[version]*100.0)
                 
             report += "</ul>"
         report += "</ul>"
@@ -395,17 +403,16 @@ class SKUData:
         
         if reportType == ReportTypes.DetailedSummary:
             print "    Version Breakdown"
+            
             for version in reversed(self.versions):
                 print "      {version}".format(version=version)
             
-                if version in self.unitsByVersion:
-                    print "        Sales            : {sold:6} units".format(sold=self.unitsByVersion[version])
-                if version in self.updatesByVersion:
-                    print "        Updates          : {updates:6} units".format(updates=self.updatesByVersion[version])
-                if version in self.promoCodesByVersion:
-                    print "        Promo Codes Used : {promoCodes:6}".format(promoCodes=self.promoCodesByVersion[version])
-                if version in self.proceedsByVersion:
-                    print "        Proceeds         : {proceeds:6.02f}".format(proceeds=self.proceedsByVersion[version])
+                print "        Sales            : {sold:6} units".format(sold=self.unitsByVersion[version])
+                print "        Updates          : {updates:6} units".format(updates=self.updatesByVersion[version])
+                print "        Promo Codes Used : {promoCodes:6}".format(promoCodes=self.promoCodesByVersion[version])
+                print "        Proceeds         : {proceeds:6.02f}".format(proceeds=self.proceedsByVersion[version])
+                if version in self.userRetentionByVersion:
+                    print "        Users Retained   : {retainedPct:3.1f}% of existing users upgraded to this version".format(retainedPct=self.userRetentionByVersion[version]*100.0)
 
     def saveUnitsGraph(self, basePath, sales, updates, entryDates):
         barWidth = 0.35
@@ -762,7 +769,7 @@ def usage():
     print "          -s               Saves HTML report"
 
 def main(argv):
-    print "Harvest Reports v0.1"
+    print "Harvest Reports v0.1.1"
     print "Written by Iain McManus"
     print ""
     print "Copyright (c) 2014 Iain McManus. All rights reserved"
