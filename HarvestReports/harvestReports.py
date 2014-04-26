@@ -705,16 +705,16 @@ def emailReportForToday(downloadedFiles, perSKUData):
                 summary_HTML += skuSummary.getEmailSummary_HTML()
                 
                 if len(skuSummary.newSalesByCountry) > 0:
-                    attachments.update({skuSummary.SKU + "NewSalesByCountry.png" : skuSummary.Graphs["NewSalesByCountry"]})
-                    summary_HTML += '<br><img src="cid:{SKU}NewSalesByCountry.png"><br>'.format(SKU=skuSummary.SKU)
+                    attachments.update({skuSummary.SKU + "NewSalesByCountry" : skuSummary.Graphs["NewSalesByCountry"]})
+                    summary_HTML += '<br><img src="cid:{SKU}NewSalesByCountry"><br>'.format(SKU=skuSummary.SKU)
     
     for skuSummary in perSKUData.values():
         summary_HTML += skuSummary.getReport_HTML()
             
-        summary_HTML += '<br><img src="cid:{SKU}SalesAndUpdates.png"><br>'.format(SKU=skuSummary.SKU)
-        attachments.update({skuSummary.SKU + "SalesAndUpdates.png" : skuSummary.Graphs["SalesAndUpdates"]})
-        summary_HTML += '<br><img src="cid:{SKU}SalesByCountry.png"><br>'.format(SKU=skuSummary.SKU)
-        attachments.update({skuSummary.SKU + "SalesByCountry.png" : skuSummary.Graphs["SalesByCountry"]})
+        summary_HTML += '<br><img src="cid:{SKU}SalesAndUpdates"><br>'.format(SKU=skuSummary.SKU)
+        attachments.update({skuSummary.SKU + "SalesAndUpdates" : skuSummary.Graphs["SalesAndUpdates"]})
+        summary_HTML += '<br><img src="cid:{SKU}SalesByCountry"><br>'.format(SKU=skuSummary.SKU)
+        attachments.update({skuSummary.SKU + "SalesByCountry" : skuSummary.Graphs["SalesByCountry"]})
     
     summary_HTML += """\
   </body>
@@ -726,21 +726,26 @@ def emailReportForToday(downloadedFiles, perSKUData):
         reader = csv.reader(configFile)
         emailConfig = {rows[0]:rows[1] for rows in reader}
     
-    emailMessage = MIMEMultipart("alternative")
+    emailMessage = MIMEMultipart("related")
     emailMessage["Subject"] = emailConfig["Subject"]
     emailMessage["From"] = emailConfig["From"]
     emailMessage["To"] = emailConfig["To"]
     
-    emailMessage.attach(MIMEText(summary_PlainText, "plain"))
-    emailMessage.attach(MIMEText(summary_HTML, "html"))
+    msgContainer = MIMEMultipart("alternative")
+    
+    emailMessage.attach(msgContainer)
+    
+    msgContainer.attach(MIMEText(summary_PlainText, "plain"))
+    msgContainer.attach(MIMEText(summary_HTML, "html"))
     
     # attach all of the images to the email
     for attachmentName in attachments:
         attachmentHandle = open(attachments[attachmentName], 'rb')
-        attachmentImage = MIMEImage(attachmentHandle.read())
+        attachmentImage = MIMEImage(attachmentHandle.read(), "png")
         attachmentHandle.close()
         
         attachmentImage.add_header("Content-ID", attachmentName)
+        attachmentImage.add_header("Content-Disposition", "inline", filename=attachmentName+".png")
         emailMessage.attach(attachmentImage)
     
     try:
