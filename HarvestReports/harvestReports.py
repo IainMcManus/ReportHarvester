@@ -499,7 +499,7 @@ class SKUData:
         self.generateAndSaveCountrySalesChart(fileName, "Units Sold by Country", countries, sales)
         self.Graphs.update({"SalesByCountry":fileName})
     
-        if self.hasNewData:
+        if self.hasNewData and len(self.newSalesByCountry) > 0:
             countries = self.newSalesByCountry.keys()
             sales = self.newSalesByCountry.values()
     
@@ -704,8 +704,9 @@ def emailReportForToday(downloadedFiles, perSKUData):
                 summary_PlainText += skuSummary.getEmailSummary_PlainText()
                 summary_HTML += skuSummary.getEmailSummary_HTML()
                 
-                attachments.update({skuSummary.SKU + "NewSalesByCountry.png" : skuSummary.Graphs["NewSalesByCountry"]})
-                summary_HTML += '<br><img src="cid:{SKU}NewSalesByCountry.png"><br>'.format(SKU=skuSummary.SKU)
+                if len(skuSummary.newSalesByCountry) > 0:
+                    attachments.update({skuSummary.SKU + "NewSalesByCountry.png" : skuSummary.Graphs["NewSalesByCountry"]})
+                    summary_HTML += '<br><img src="cid:{SKU}NewSalesByCountry.png"><br>'.format(SKU=skuSummary.SKU)
     
     for skuSummary in perSKUData.values():
         summary_HTML += skuSummary.getReport_HTML()
