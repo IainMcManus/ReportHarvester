@@ -596,7 +596,7 @@ def processDailiesIn(basePath, downloadedFiles, reportType):
 def downloadDailies(propertiesFile, vendorId, numDaysBack, overwriteExistingData, basePath, verbose):
     downloadedFiles = []
     
-    currentDayReportNotAvailable = False
+    addedPlaceHolderFileForEventlessDay = False
     
     for dayOffset in range(0, numDaysBack):
         requestedDate = datetime.date.today() - datetime.timedelta(dayOffset)
@@ -616,10 +616,12 @@ def downloadDailies(propertiesFile, vendorId, numDaysBack, overwriteExistingData
                 downloadedSuccessfully = True
             elif "There are no reports available to download for this selection." in autoingestionOutput:
                 noReportsAvailable = True
-            elif "Daily reports are available only for" in autoingestionOutput:
-                if dayOffset == 0:
-                    currentDayReportNotAvailable = True
                 
+                placeholderHandle = open(downloadedFilePath, 'wt')
+                placeholderHandle.close()
+                
+                addedPlaceHolderFileForEventlessDay = True
+            elif "Daily reports are available only for" in autoingestionOutput:
                 invalidDate = True
                     
             if downloadedSuccessfully:
@@ -650,7 +652,7 @@ def downloadDailies(propertiesFile, vendorId, numDaysBack, overwriteExistingData
                     print "Failed to download report for {day:02}/{month:02}/{year:04}".format(day=requestedDate.day, month=requestedDate.month, year=requestedDate.year)
                 
                     if noReportsAvailable:
-                        print "    No sales are occurred for that date"
+                        print "    No sales have occurred for that date"
                     elif invalidDate:
                         print "    No data exists for that date. Either the day is too far back (Apple only keeps a limited number of dailies) or the report for that day does not yet exist"
                     else:
@@ -659,7 +661,7 @@ def downloadDailies(propertiesFile, vendorId, numDaysBack, overwriteExistingData
             if verbose:
                 print "Skipped existing data for {day:02}/{month:02}/{year:04}".format(day=requestedDate.day, month=requestedDate.month, year=requestedDate.year)
     
-    return [currentDayReportNotAvailable, downloadedFiles]
+    return [addedPlaceHolderFileForEventlessDay, downloadedFiles]
 
 def generateHTMLReport(basePath, perSKUData):
     report_HTML = """\
@@ -682,7 +684,7 @@ def generateHTMLReport(basePath, perSKUData):
     
     reportFile.close()
 
-def emailReportForToday(downloadedFiles, perSKUData):
+def emailReportForNewData(downloadedFiles, perSKUData):
     summary_PlainText = ""
     summary_HTML = """\
 <html>
@@ -833,15 +835,15 @@ def main(argv):
     if not os.path.exists(basePath):
         os.makedirs(basePath)
 
-    [currentDayReportNotAvailable, downloadedFiles] = downloadDailies(propertiesFile, vendorId, daysBack, overwriteExistingData, basePath, verbose)
+    [addedPlaceHolderFileForEventlessDay, downloadedFiles] = downloadDailies(propertiesFile, vendorId, daysBack, overwriteExistingData, basePath, verbose)
     
     perSKUData = processDailiesIn(basePath, downloadedFiles, reportType)
         
     if saveHTMLReport:
         generateHTMLReport(basePath, perSKUData)
 
-    if (len(downloadedFiles) > 0) and sendEmail:
-        emailReportForToday(downloadedFiles, perSKUData)
+    if (addedPlaceHolderFileForEventlessDay or (len(downloadedFiles) > 0)) and sendEmail:
+        emailReportForNewData(downloadedFiles, perSKUData)
 
 if __name__ == '__main__':
     main(sys.argv[1:])
