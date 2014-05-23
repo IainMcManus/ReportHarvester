@@ -170,24 +170,34 @@ class SKUData:
         self.Name = "Unknown"
         
         self.unitsByVersion = dict()
-        self.unitsTotal = 0
+        self.allInstallsTotal = 0
+        self.paidInstallsTotal = 0
+        self.freeInstallsTotal = 0
         self.proceedsByVersion = dict()
         self.proceedsTotal = 0
         self.updatesByVersion = dict()
         self.promoCodesByVersion = dict()
         self.promoCodesTotal = 0
         self.versions = []
-        self.salesByDate = dict()
+        self.paidInstallsByDate = dict()
+        self.freeInstallsByDate = dict()
+        self.allInstallsByDate = dict()
         self.updatesByDate = dict()
         self.proceedsByDate = dict()
-        self.salesByCountry = dict()
+        self.paidInstallsByCountry = dict()
+        self.freeInstallsByCountry = dict()
+        self.allInstallsByCountry = dict()
 
-        self.newSalesTotal = 0
+        self.newPaidInstallsTotal = 0
+        self.newFreeInstallsTotal = 0
+        self.newAllInstallsTotal = 0
         self.newProceedsTotal = 0
         self.newUpdatesTotal = 0
         self.newPromoCodesTotal = 0
         self.hasNewData = False
-        self.newSalesByCountry = dict()
+        self.newPaidInstallsByCountry = dict()
+        self.newFreeInstallsByCountry = dict()
+        self.newAllInstallsByCountry = dict()
         
         self.rawData.sort(key = lambda x: x[1]["Begin Date"])
         
@@ -222,8 +232,12 @@ class SKUData:
             # ensure the date is recorded for all arrays
             if not startDate in self.updatesByDate:
                 self.updatesByDate.update({startDate : 0})
-            if not startDate in self.salesByDate:
-                self.salesByDate.update({startDate : 0})
+            if not startDate in self.allInstallsByDate:
+                self.allInstallsByDate.update({startDate : 0})
+            if not startDate in self.paidInstallsByDate:
+                self.paidInstallsByDate.update({startDate : 0})
+            if not startDate in self.freeInstallsByDate:
+                self.freeInstallsByDate.update({startDate : 0})
             if not startDate in self.proceedsByDate:
                 self.proceedsByDate.update({startDate : 0})
             
@@ -242,7 +256,7 @@ class SKUData:
                 if isNewData:
                     self.newUpdatesTotal += units
             else: # the report line is for sales
-                self.unitsTotal += units
+                self.allInstallsTotal += units
                 
                 if version in self.unitsByVersion:
                     newUnitsForVersion = self.unitsByVersion[version] + units
@@ -250,28 +264,28 @@ class SKUData:
                 else:
                     self.unitsByVersion.update({version : units})
                     
-                if startDate in self.salesByDate:
-                    newSalesByDate = self.salesByDate[startDate] + units
-                    self.salesByDate.update({startDate : newSalesByDate})
+                if startDate in self.allInstallsByDate:
+                    newInstallsByDate = self.allInstallsByDate[startDate] + units
+                    self.allInstallsByDate.update({startDate : newInstallsByDate})
                 
                 if startDate in self.proceedsByDate:
                     newProceedsByDate = self.proceedsByDate[startDate] + proceeds
                     self.proceedsByDate.update({startDate : newProceedsByDate})
                 
-                if country in self.salesByCountry:
-                    newSalesByCountry = self.salesByCountry[country] + units
-                    self.salesByCountry.update({country : newSalesByCountry})
+                if country in self.allInstallsByCountry:
+                    newAllInstallsByCountry = self.allInstallsByCountry[country] + units
+                    self.allInstallsByCountry.update({country : newAllInstallsByCountry})
                 else:
-                    self.salesByCountry.update({country : units})
+                    self.allInstallsByCountry.update({country : units})
             
                 if isNewData:
-                    self.newSalesTotal += units
+                    self.newAllInstallsTotal += units
                 
-                    if country in self.newSalesByCountry:
-                        newNewSalesByCountry = self.newSalesByCountry[country] + units
-                        self.newSalesByCountry.update({country : newNewSalesByCountry})
+                    if country in self.newAllInstallsByCountry:
+                        newNewAllInstallsByCountry = self.newAllInstallsByCountry[country] + units
+                        self.newAllInstallsByCountry.update({country : newNewAllInstallsByCountry})
                     else:
-                        self.newSalesByCountry.update({country : units})
+                        self.newAllInstallsByCountry.update({country : units})
             
                 if version in self.proceedsByVersion:
                     newProceedsForVersion = self.proceedsByVersion[version] + proceeds
@@ -291,6 +305,50 @@ class SKUData:
                         
                     if isNewData:
                         self.newPromoCodesTotal += units
+                
+                # was this a sale?
+                if proceeds > 0:
+                    self.paidInstallsTotal += units
+                    
+                    if startDate in self.paidInstallsByDate:
+                        newPaidInstallsByDate = self.paidInstallsByDate[startDate] + units
+                        self.paidInstallsByDate.update({startDate : newPaidInstallsByDate})
+                
+                    if country in self.paidInstallsByCountry:
+                        newPaidInstallsByCountry = self.paidInstallsByCountry[country] + units
+                        self.paidInstallsByCountry.update({country : newPaidInstallsByCountry})
+                    else:
+                        self.paidInstallsByCountry.update({country : units})
+            
+                    if isNewData:
+                        self.newPaidInstallsTotal += units
+                
+                        if country in self.newPaidInstallsByCountry:
+                            newNewPaidInstallsByCountry = self.newPaidInstallsByCountry[country] + units
+                            self.newPaidInstallsByCountry.update({country : newNewPaidInstallsByCountry})
+                        else:
+                            self.newPaidInstallsByCountry.update({country : units})
+                else: # otherwise it was a free installs
+                    self.freeInstallsTotal += units
+                    
+                    if startDate in self.freeInstallsByDate:
+                        newFreeInstallsByDate = self.freeInstallsByDate[startDate] + units
+                        self.freeInstallsByDate.update({startDate : newFreeInstallsByDate})
+                
+                    if country in self.freeInstallsByCountry:
+                        newFreeInstallsByCountry = self.freeInstallsByCountry[country] + units
+                        self.freeInstallsByCountry.update({country : newFreeInstallsByCountry})
+                    else:
+                        self.freeInstallsByCountry.update({country : units})
+            
+                    if isNewData:
+                        self.newFreeInstallsTotal += units
+                
+                        if country in self.newFreeInstallsByCountry:
+                            newNewFreeInstallsByCountry = self.newFreeInstallsByCountry[country] + units
+                            self.newFreeInstallsByCountry.update({country : newNewFreeInstallsByCountry})
+                        else:
+                            self.newFreeInstallsByCountry.update({country : units})
                 
         self.versions.sort()
 
@@ -314,16 +372,22 @@ class SKUData:
             numPreviousVersion += self.unitsByVersion[version]
         
         # calculate the number on old versions
-        self.numOnOldVersions = self.unitsTotal
+        self.numOnOldVersions = self.allInstallsTotal
         self.numOnOldVersions -= self.updatesByVersion[self.versions[len(self.versions) - 1]]
         self.numOnOldVersions -= self.unitsByVersion[self.versions[len(self.versions) - 1]]
-        self.legacyUserPercentage = 100.0 * self.numOnOldVersions / self.unitsTotal
+        self.legacyUserPercentage = 100.0 * self.numOnOldVersions / self.allInstallsTotal
         
         self.generateGraphs(basePath)
     
     def printNewData(self):
         print "New Data Available for {name}".format(name=self.Name)
-        print "    Units Sold          : {units:6}".format(units=self.newSalesTotal)
+        if self.newFreeInstallsTotal > 0:
+            print "    Free Installs       : {units:6}".format(units=self.newFreeInstallsTotal)
+        if self.newPaidInstallsTotal > 0:
+            print "    Sales               : {units:6}".format(units=self.newPaidInstallsTotal)
+        if self.newAllInstallsTotal > 0:
+            print "    Total Installs      : {units:6}".format(units=self.newAllInstallsTotal)
+            
         if self.promoCodesTotal > 0:
             print "    Promo Codes Used    : {promoCodes:6}".format(promoCodes=self.newPromoCodesTotal)
         print "    Proceeds            : {proceeds:6.02f}".format(proceeds=self.newProceedsTotal)
@@ -331,7 +395,12 @@ class SKUData:
         
     def getReport_HTML(self):
         report = "<p><h1>Sales Report for {name}</h1></p>".format(name=self.Name)
-        report += "<p><b>Total Units Sold</b>    : {units:6}</p>".format(units=self.unitsTotal)
+        if self.freeInstallsTotal > 0:
+            report += "<p><b>Free Installs</b>       : {units:6}</p>".format(units=self.freeInstallsTotal)
+        if self.paidInstallsTotal > 0:
+            report += "<p><b>Sales</b>               : {units:6}</p>".format(units=self.paidInstallsTotal)
+        if self.allInstallsTotal > 0:
+            report += "<p><b>Total Installs</b>      : {units:6}</p>".format(units=self.allInstallsTotal)
         
         if self.promoCodesTotal > 0:
             report += "<p><b>Promo Codes Used</b>    : {promoCodes:6}</p>".format(promoCodes=self.promoCodesTotal)
@@ -346,9 +415,10 @@ class SKUData:
             report += "<li><b>{version}</b>".format(version=version)
             report += "<ul>"
             
-            report += "<li>{sold:6} units sold</li>".format(sold=self.unitsByVersion[version])
+            report += "<li>{installed:6} installs</li>".format(installed=self.unitsByVersion[version])
             report += "<li>{updates:6} installs updated to this version</li>".format(updates=self.updatesByVersion[version])
-            report += "<li>{promoCodes:6} promo codes used for this version</li>".format(promoCodes=self.promoCodesByVersion[version])
+            if self.promoCodesByVersion[version] > 0:
+                report += "<li>{promoCodes:6} promo codes used for this version</li>".format(promoCodes=self.promoCodesByVersion[version])
             report += "<li>{proceeds:6.02f} earned from this version</li>".format(proceeds=self.proceedsByVersion[version])
             
             if version in self.userRetentionByVersion:
@@ -364,8 +434,15 @@ class SKUData:
         
         summary += "<p><h1>New Data Available for {name}</h1></p>".format(name=self.Name)
         summary += "<br>"
-        summary += "<b>Units Sold</b>          : {units:6}".format(units=self.newSalesTotal)
-        summary += "<br>"
+        if self.newFreeInstallsTotal > 0:
+            summary += "<b>Free Installs</b>             : {units:6}".format(units=self.newFreeInstallsTotal)
+            summary += "<br>"
+        if self.newPaidInstallsTotal > 0:
+            summary += "<b>Sales</b>                     : {units:6}".format(units=self.newPaidInstallsTotal)
+            summary += "<br>"
+        if self.newAllInstallsTotal > 0:
+            summary += "<b>Total Installs</b>            : {units:6}".format(units=self.newAllInstallsTotal)
+            summary += "<br>"
         if self.promoCodesTotal > 0:
             summary += "<b>Promo Codes Used</b>    : {promoCodes:6}".format(promoCodes=self.newPromoCodesTotal)
             summary += "<br>"
@@ -381,11 +458,15 @@ class SKUData:
         
         summary += "New Data Available for {name}".format(name=self.Name)
         summary += "\r\n"
-        summary += "    Units Sold          : {units:6}".format(units=self.newSalesTotal)
-        summary += "\r\n"
+        if self.newPaidInstallsTotal > 0:
+            summary += "    Free Installs       : {units:6}".format(units=self.newFreeInstallsTotal)
+        if self.newFreeInstallsTotal > 0:
+            summary += "    Sales               : {units:6}".format(units=self.newPaidInstallsTotal)
+        if self.newAllInstallsTotal > 0:
+            summary += "    Total Installs      : {units:6}".format(units=self.newAllInstallsTotal)
         if self.promoCodesTotal > 0:
             summary += "    Promo Codes Used    : {promoCodes:6}".format(promoCodes=self.newPromoCodesTotal)
-            summary += "\r\n"
+        summary += "\r\n"
         summary += "    Proceeds            : {proceeds:6.02f}".format(proceeds=self.newProceedsTotal)
         summary += "\r\n"
         summary += "    Updates             : {updates:6}".format(updates=self.newUpdatesTotal)
@@ -395,7 +476,12 @@ class SKUData:
                 
     def printSummary(self, reportType):
         print "Summary for {name}".format(name=self.Name)
-        print "    Units Sold          : {units:6}".format(units=self.unitsTotal)
+        if self.freeInstallsTotal > 0:
+            print "    Free Installs       : {units:6}".format(units=self.freeInstallsTotal)
+        if self.paidInstallsTotal > 0:
+            print "    Sales               : {units:6}".format(units=self.paidInstallsTotal)
+        if self.allInstallsTotal > 0:
+            print "    Total Installs      : {units:6}".format(units=self.allInstallsTotal)
         if self.promoCodesTotal > 0:
             print "    Promo Codes Used    : {promoCodes:6}".format(promoCodes=self.promoCodesTotal)
         print "    Proceeds            : {proceeds:6.02f}".format(proceeds=self.proceedsTotal)
@@ -407,21 +493,22 @@ class SKUData:
             for version in reversed(self.versions):
                 print "      {version}".format(version=version)
             
-                print "        Sales            : {sold:6} units".format(sold=self.unitsByVersion[version])
+                print "        Installs         : {installed:6} units".format(installed=self.unitsByVersion[version])
                 print "        Updates          : {updates:6} units".format(updates=self.updatesByVersion[version])
-                print "        Promo Codes Used : {promoCodes:6}".format(promoCodes=self.promoCodesByVersion[version])
+                if self.promoCodesByVersion[version] > 0:
+                    print "        Promo Codes Used : {promoCodes:6}".format(promoCodes=self.promoCodesByVersion[version])
                 print "        Proceeds         : {proceeds:6.02f}".format(proceeds=self.proceedsByVersion[version])
                 if version in self.userRetentionByVersion:
                     print "        Users Retained   : {retainedPct:3.1f}% of existing users upgraded to this version".format(retainedPct=self.userRetentionByVersion[version]*100.0)
 
-    def saveUnitsGraph(self, basePath, sales, updates, entryDates):
+    def saveUnitsGraph(self, basePath, installs, updates, entryDates):
         barWidth = 0.35
         barIndices = np.arange(len(entryDates))
     
-        maxY = max(max(sales), max(updates)) + 1
+        maxY = max(max(installs), max(updates)) + 1
     
         figure, unitsGraph = plt.subplots()
-        salesRects = unitsGraph.bar(barIndices, sales, barWidth, color='g')
+        installsRects = unitsGraph.bar(barIndices, installs, barWidth, color='g')
         updatesRects = unitsGraph.bar(barIndices+barWidth, updates, barWidth, color='b')
         plt.ylim(ymax=maxY, ymin=0)
     
@@ -430,7 +517,7 @@ class SKUData:
         unitsGraph.set_xticks(barIndices+barWidth)
         unitsGraph.set_xticklabels(entryDates, rotation=-90)
 
-        unitsGraph.legend((salesRects[0], updatesRects[0]), ('Sales', 'Updates'), bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+        unitsGraph.legend((installsRects[0], updatesRects[0]), ('Installs', 'Updates'), bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     
         def autolabel(rects):
             for rect in rects:
@@ -438,15 +525,15 @@ class SKUData:
                 if height > 0:
                     unitsGraph.text(rect.get_x()+rect.get_width()/2., 1.05*height, '%d'%int(height), ha='center', va='bottom')
 
-        autolabel(salesRects)
+        autolabel(installsRects)
         autolabel(updatesRects)
     
-        fileName = os.path.join(basePath, self.SKU + "_SalesAndUpdates.png")
+        fileName = os.path.join(basePath, self.SKU + "_AllInstallsAndUpdates.png")
         plt.savefig(fileName,bbox_inches='tight',dpi=100)
         plt.clf()
         plt.cla()
         
-        self.Graphs.update({"SalesAndUpdates":fileName})
+        self.Graphs.update({"AllInstallsAndUpdates":fileName})
 
     def saveProceedsGraph(self, basePath, proceeds, entryDates):
         barWidth = 0.7
@@ -478,13 +565,18 @@ class SKUData:
         
         self.Graphs.update({"Proceeds":fileName})
     
-    def generateAndSaveCountrySalesChart(self, fileName, title, countries, sales):
+    def generateAndSaveCountryInstallsChart(self, fileName, title, countries, installs):
         for countryIdx in range(0, len(countries)):
-            countries[countryIdx] += " ({sales})".format(sales=sales[countryIdx])
+            countries[countryIdx] += " ({installs})".format(installs=installs[countryIdx])
         
         plt.figure(1, figsize=(6,6))
     
-        plt.pie(sales, labels=countries, shadow=False)
+        pieWedges = plt.pie(installs, labels=countries, shadow=False)
+        
+        # make the edges white (From http://nxn.se/post/46440196846/making-nicer-looking-pie-charts-with-matplotlib)
+        for wedge in pieWedges[0]:
+            wedge.set_edgecolor('white')
+            
         plt.title(title)
     
         plt.savefig(fileName, bbox_inches='tight', dpi=100)
@@ -492,30 +584,38 @@ class SKUData:
         plt.cla()
 
     def saveCountryDistributionGraphs(self, basePath):
-        countries = self.salesByCountry.keys()
-        sales = self.salesByCountry.values()
+        reportList = dict();
+        reportList.update({"PaidInstalls" : ["Sales",          self.paidInstallsByCountry, self.newPaidInstallsByCountry]})
+        reportList.update({"FreeInstalls" : ["Free Installs",  self.freeInstallsByCountry, self.newFreeInstallsByCountry]})
+        reportList.update({"AllInstalls"  : ["Total Installs", self.allInstallsByCountry, self.newAllInstallsByCountry]})
+        
+        for reportName in reportList:
+            [reportTitle, installsByCountry, newInstallsByCountry] = reportList[reportName]
+            
+            countries = installsByCountry.keys()
+            installs = installsByCountry.values()
+            
+            fileName = os.path.join(basePath, self.SKU + "_{reportName}ByCountry.png".format(reportName=reportName))
+            self.generateAndSaveCountryInstallsChart(fileName, "{reportTitle} by Country".format(reportTitle=reportTitle), countries, installs)
+            self.Graphs.update({"{reportName}ByCountry".format(reportName=reportName):fileName})
     
-        fileName = os.path.join(basePath, self.SKU + "_UnitsSoldByCountry.png")
-        self.generateAndSaveCountrySalesChart(fileName, "Units Sold by Country", countries, sales)
-        self.Graphs.update({"SalesByCountry":fileName})
-    
-        if self.hasNewData and len(self.newSalesByCountry) > 0:
-            countries = self.newSalesByCountry.keys()
-            sales = self.newSalesByCountry.values()
-    
-            fileName = os.path.join(basePath, self.SKU + "_NewUnitsSoldByCountry.png")
-            self.generateAndSaveCountrySalesChart(fileName, "New Units Sold by Country", countries, sales)
-            self.Graphs.update({"NewSalesByCountry":fileName})
+            if self.hasNewData and len(newInstallsByCountry) > 0:
+                countries = newInstallsByCountry.keys()
+                installs = newInstallsByCountry.values()
+                
+                fileName = os.path.join(basePath, self.SKU + "_New{reportName}ByCountry.png".format(reportName=reportName))
+                self.generateAndSaveCountryInstallsChart(fileName, "New {reportTitle} by Country".format(reportTitle=reportTitle), countries, installs)
+                self.Graphs.update({"New{reportName}ByCountry".format(reportName=reportName):fileName})
 
     def generateGraphs(self, basePath):
         startDate = datetime.date.today()
     
         entryDates = []
     
-        reportDates = self.salesByDate.keys()
+        reportDates = self.allInstallsByDate.keys()
         reportDates.sort()
     
-        sales = []
+        installs = []
         updates = []
         proceeds = []
     
@@ -526,15 +626,15 @@ class SKUData:
             entryDates.append(searchDate)
         
             if searchDate in reportDates:
-                sales.append(self.salesByDate[searchDate])
+                installs.append(self.allInstallsByDate[searchDate])
                 updates.append(self.updatesByDate[searchDate])
                 proceeds.append(self.proceedsByDate[searchDate])
             else:
-                sales.append(0)
+                installs.append(0)
                 updates.append(0)
                 proceeds.append(0)
     
-        self.saveUnitsGraph(basePath, sales, updates, entryDates)
+        self.saveUnitsGraph(basePath, installs, updates, entryDates)
         self.saveProceedsGraph(basePath, proceeds, entryDates)
         self.saveCountryDistributionGraphs(basePath)
                 
@@ -652,7 +752,7 @@ def downloadDailies(propertiesFile, vendorId, numDaysBack, overwriteExistingData
                     print "Failed to download report for {day:02}/{month:02}/{year:04}".format(day=requestedDate.day, month=requestedDate.month, year=requestedDate.year)
                 
                     if noReportsAvailable:
-                        print "    No sales have occurred for that date"
+                        print "    No installs have occurred for that date"
                     elif invalidDate:
                         print "    No data exists for that date. Either the day is too far back (Apple only keeps a limited number of dailies) or the report for that day does not yet exist"
                     else:
@@ -695,8 +795,8 @@ def emailReportForNewData(downloadedFiles, perSKUData):
     attachments = dict()
 
     if len(downloadedFiles) == 0:
-        summary_PlainText = "No sales or updates have occurred today"
-        summary_HTML = "<p>No sales or updates have occurred today</p>"
+        summary_PlainText = "No installs or updates have occurred today"
+        summary_HTML = "<p>No installs or updates have occurred today</p>"
     else:
         for skuSummary in perSKUData.values():
             if skuSummary.hasNewData:
@@ -706,17 +806,17 @@ def emailReportForNewData(downloadedFiles, perSKUData):
                 summary_PlainText += skuSummary.getEmailSummary_PlainText()
                 summary_HTML += skuSummary.getEmailSummary_HTML()
                 
-                if len(skuSummary.newSalesByCountry) > 0:
-                    attachments.update({skuSummary.SKU + "NewSalesByCountry" : skuSummary.Graphs["NewSalesByCountry"]})
-                    summary_HTML += '<br><img src="cid:{SKU}NewSalesByCountry"><br>'.format(SKU=skuSummary.SKU)
+                if len(skuSummary.newAllInstallsByCountry) > 0:
+                    attachments.update({skuSummary.SKU + "NewAllInstallsByCountry" : skuSummary.Graphs["NewAllInstallsByCountry"]})
+                    summary_HTML += '<br><img src="cid:{SKU}NewAllInstallsByCountry"><br>'.format(SKU=skuSummary.SKU)
     
     for skuSummary in perSKUData.values():
         summary_HTML += skuSummary.getReport_HTML()
             
-        summary_HTML += '<br><img src="cid:{SKU}SalesAndUpdates"><br>'.format(SKU=skuSummary.SKU)
-        attachments.update({skuSummary.SKU + "SalesAndUpdates" : skuSummary.Graphs["SalesAndUpdates"]})
-        summary_HTML += '<br><img src="cid:{SKU}SalesByCountry"><br>'.format(SKU=skuSummary.SKU)
-        attachments.update({skuSummary.SKU + "SalesByCountry" : skuSummary.Graphs["SalesByCountry"]})
+        summary_HTML += '<br><img src="cid:{SKU}AllInstallsAndUpdates"><br>'.format(SKU=skuSummary.SKU)
+        attachments.update({skuSummary.SKU + "AllInstallsAndUpdates" : skuSummary.Graphs["AllInstallsAndUpdates"]})
+        summary_HTML += '<br><img src="cid:{SKU}AllInstallsByCountry"><br>'.format(SKU=skuSummary.SKU)
+        attachments.update({skuSummary.SKU + "AllInstallsByCountry" : skuSummary.Graphs["AllInstallsByCountry"]})
     
     summary_HTML += """\
   </body>
