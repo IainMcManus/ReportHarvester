@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# Harvest Reports v0.1.1
+# Harvest Reports v0.1.2
 # Copyright (c) 2014 Iain McManus. All rights reserved.
 #
 # Harvest Reports is a wrapper around Apple's AutoIngestion Java Class.
@@ -104,6 +104,7 @@ class SalesReportFile:
     def __init__(self, reportFile, isNewFile, fieldRemapper):
         self.data = []
         self.isNewFile = isNewFile
+        self.fileName = reportFile
         
         # stream in the downloaded report file
         reportFileHandle = open(reportFile, 'r')
@@ -198,6 +199,7 @@ class SKUData:
         self.newPaidInstallsByCountry = dict()
         self.newFreeInstallsByCountry = dict()
         self.newAllInstallsByCountry = dict()
+        self.newDataDates = []
         
         self.rawData.sort(key = lambda x: x[1]["Begin Date"])
         
@@ -210,6 +212,8 @@ class SKUData:
             if self.Name == "Unknown" and len(reportLine["Title"].strip()) > 0:
                 self.Name = reportLine["Title"]
             
+            startDate = reportLine["Begin Date"]
+            
             version = reportLine["Version"]
             units = reportLine["Units"]
             proceedsPerItem = reportLine["Developer Proceeds (per item)"]
@@ -218,16 +222,15 @@ class SKUData:
             
             self.proceedsTotal += proceeds
             
-            # track new profits
+            # check if new data is present and setup some basic details
             if isNewData:
                 self.newProceedsTotal += proceeds
                 self.hasNewData = True
+                self.newDataDates.append(startDate)
             
             # record all versions
             if not version in self.versions:
                 self.versions.append(version)
-            
-            startDate = reportLine["Begin Date"]
             
             # ensure the date is recorded for all arrays
             if not startDate in self.updatesByDate:
@@ -243,65 +246,30 @@ class SKUData:
             
             # the report line is for updates
             if "Update" in reportLine["Product Type Identifier"]:
-                if version in self.updatesByVersion:
-                    newUpdatesByVersion = self.updatesByVersion[version] + units
-                    self.updatesByVersion.update({version : newUpdatesByVersion})
-                else:
-                    self.updatesByVersion.update({version : units})
-                
-                if startDate in self.updatesByDate:
-                    newUpdatesByDate = self.updatesByDate[startDate] + units
-                    self.updatesByDate.update({startDate : newUpdatesByDate})
+                self.updatesByVersion[version] = self.updatesByVersion.setdefault(version, 0) + units
+                self.updatesByDate[startDate] = self.updatesByDate.setdefault(startDate, 0) + units
             
                 if isNewData:
                     self.newUpdatesTotal += units
             else: # the report line is for sales
                 self.allInstallsTotal += units
                 
-                if version in self.unitsByVersion:
-                    newUnitsForVersion = self.unitsByVersion[version] + units
-                    self.unitsByVersion.update({version : newUnitsForVersion})
-                else:
-                    self.unitsByVersion.update({version : units})
-                    
-                if startDate in self.allInstallsByDate:
-                    newInstallsByDate = self.allInstallsByDate[startDate] + units
-                    self.allInstallsByDate.update({startDate : newInstallsByDate})
-                
-                if startDate in self.proceedsByDate:
-                    newProceedsByDate = self.proceedsByDate[startDate] + proceeds
-                    self.proceedsByDate.update({startDate : newProceedsByDate})
-                
-                if country in self.allInstallsByCountry:
-                    newAllInstallsByCountry = self.allInstallsByCountry[country] + units
-                    self.allInstallsByCountry.update({country : newAllInstallsByCountry})
-                else:
-                    self.allInstallsByCountry.update({country : units})
+                self.unitsByVersion[version] = self.unitsByVersion.setdefault(version, 0) + units
+                self.allInstallsByDate[startDate] = self.allInstallsByDate.setdefault(startDate, 0) + units
+                self.allInstallsByCountry[country] = self.allInstallsByCountry.setdefault(country, 0) + units
+                self.proceedsByDate[startDate] = self.proceedsByDate.setdefault(startDate, 0) + proceeds
+                self.proceedsByVersion[version] = self.proceedsByVersion.setdefault(version, 0) + proceeds
             
                 if isNewData:
                     self.newAllInstallsTotal += units
                 
-                    if country in self.newAllInstallsByCountry:
-                        newNewAllInstallsByCountry = self.newAllInstallsByCountry[country] + units
-                        self.newAllInstallsByCountry.update({country : newNewAllInstallsByCountry})
-                    else:
-                        self.newAllInstallsByCountry.update({country : units})
-            
-                if version in self.proceedsByVersion:
-                    newProceedsForVersion = self.proceedsByVersion[version] + proceeds
-                    self.proceedsByVersion.update({version : newProceedsForVersion})
-                else:
-                    self.proceedsByVersion.update({version : proceeds})
+                    self.newAllInstallsByCountry[country] = self.newAllInstallsByCountry.setdefault(country, 0) + units
                 
                 # record the count of promo codes used
                 if reportLine["Promo Code"] != None and len(reportLine["Promo Code"]) > 0:
                     self.promoCodesTotal += units
                     
-                    if version in self.promoCodesByVersion:
-                        newPromoCodesByVersion = self.promoCodesByVersion[version] + units
-                        self.promoCodesByVersion.update({version : newPromoCodesByVersion})
-                    else:
-                        self.promoCodesByVersion.update({version : units})
+                    self.promoCodesByVersion[version] = self.promoCodesByVersion.setdefault(version, 0) + units
                         
                     if isNewData:
                         self.newPromoCodesTotal += units
@@ -310,45 +278,23 @@ class SKUData:
                 if proceeds > 0:
                     self.paidInstallsTotal += units
                     
-                    if startDate in self.paidInstallsByDate:
-                        newPaidInstallsByDate = self.paidInstallsByDate[startDate] + units
-                        self.paidInstallsByDate.update({startDate : newPaidInstallsByDate})
-                
-                    if country in self.paidInstallsByCountry:
-                        newPaidInstallsByCountry = self.paidInstallsByCountry[country] + units
-                        self.paidInstallsByCountry.update({country : newPaidInstallsByCountry})
-                    else:
-                        self.paidInstallsByCountry.update({country : units})
+                    self.paidInstallsByDate[startDate] = self.paidInstallsByDate.setdefault(startDate, 0) + units
+                    self.paidInstallsByCountry[country] = self.paidInstallsByCountry.setdefault(country, 0) + units
             
                     if isNewData:
                         self.newPaidInstallsTotal += units
                 
-                        if country in self.newPaidInstallsByCountry:
-                            newNewPaidInstallsByCountry = self.newPaidInstallsByCountry[country] + units
-                            self.newPaidInstallsByCountry.update({country : newNewPaidInstallsByCountry})
-                        else:
-                            self.newPaidInstallsByCountry.update({country : units})
+                        self.newPaidInstallsByCountry[country] = self.newPaidInstallsByCountry.setdefault(country, 0) + units
                 else: # otherwise it was a free installs
                     self.freeInstallsTotal += units
                     
-                    if startDate in self.freeInstallsByDate:
-                        newFreeInstallsByDate = self.freeInstallsByDate[startDate] + units
-                        self.freeInstallsByDate.update({startDate : newFreeInstallsByDate})
-                
-                    if country in self.freeInstallsByCountry:
-                        newFreeInstallsByCountry = self.freeInstallsByCountry[country] + units
-                        self.freeInstallsByCountry.update({country : newFreeInstallsByCountry})
-                    else:
-                        self.freeInstallsByCountry.update({country : units})
+                    self.freeInstallsByDate[startDate] = self.freeInstallsByDate.setdefault(startDate, 0) + units
+                    self.freeInstallsByCountry[country] = self.freeInstallsByCountry.setdefault(country, 0) + units
             
                     if isNewData:
                         self.newFreeInstallsTotal += units
                 
-                        if country in self.newFreeInstallsByCountry:
-                            newNewFreeInstallsByCountry = self.newFreeInstallsByCountry[country] + units
-                            self.newFreeInstallsByCountry.update({country : newNewFreeInstallsByCountry})
-                        else:
-                            self.newFreeInstallsByCountry.update({country : units})
+                        self.newFreeInstallsByCountry[country] = self.newFreeInstallsByCountry.setdefault(country, 0) + units
                 
         self.versions.sort()
 
@@ -380,7 +326,14 @@ class SKUData:
         self.generateGraphs(basePath)
     
     def printNewData(self):
-        print "New Data Available for {name}".format(name=self.Name)
+        startDateString = self.newDataDates[0].strftime("%d %b %Y")
+        endDateString = self.newDataDates[-1].strftime("%d %b %Y")
+        if startDateString != endDateString:
+            print "New Data Available for {name}".format(name=self.Name)
+            print "From {startDate} to {endDate}".format(startDate=startDateString, endDate=endDateString)
+        else:
+            print "New Data Available for {name} for {startDate}".format(name=self.Name, startDate=startDateString)
+        
         if self.newFreeInstallsTotal > 0:
             print "    Free Installs       : {units:6}".format(units=self.newFreeInstallsTotal)
         if self.newPaidInstallsTotal > 0:
@@ -432,7 +385,14 @@ class SKUData:
     def getEmailSummary_HTML(self):
         summary = ""
         
-        summary += "<p><h1>New Data Available for {name}</h1></p>".format(name=self.Name)
+        startDateString = self.newDataDates[0].strftime("%d %b %Y")
+        endDateString = self.newDataDates[-1].strftime("%d %b %Y")
+        if startDateString != endDateString:
+            summary += "<p><h1>New Data Available for {name}</h1></p>".format(name=self.Name)
+            summary += "<p><h2>Data is from {startDate} to {endDate}</h2></p>".format(startDate=startDateString, endDate=endDateString)
+        else:
+            summary += "<p><h1>New Data Available for {name} for {startDate}</h1></p>".format(name=self.Name, endDate=endDateString)
+        
         summary += "<br>"
         if self.newFreeInstallsTotal > 0:
             summary += "<b>Free Installs</b>             : {units:6}".format(units=self.newFreeInstallsTotal)
@@ -665,13 +625,7 @@ def processDailiesIn(basePath, downloadedFiles, reportType):
         for reportEntry in salesReportObject.data:
             skuName = reportEntry["SKU"]
             
-            if not skuName in skuRelatedReportLines:
-                skuRelatedReportLines.update({skuName : [[salesReportObject.isNewFile, reportEntry]]})
-            else:
-                currentReportLines = skuRelatedReportLines[skuName]
-                currentReportLines.append([salesReportObject.isNewFile, reportEntry])
-                
-                skuRelatedReportLines.update({skuName : currentReportLines})
+            skuRelatedReportLines.setdefault(skuName, []).append([salesReportObject.isNewFile, reportEntry])
 
     skuData = dict()
                     
@@ -877,7 +831,7 @@ def usage():
     print "          -s               Saves HTML report"
 
 def main(argv):
-    print "Harvest Reports v0.1.1"
+    print "Harvest Reports v0.1.2"
     print "Written by Iain McManus"
     print ""
     print "Copyright (c) 2014 Iain McManus. All rights reserved"
