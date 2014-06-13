@@ -391,7 +391,7 @@ class SKUData:
             summary += "<p><h1>New Data Available for {name}</h1></p>".format(name=self.Name)
             summary += "<p><h2>Data is from {startDate} to {endDate}</h2></p>".format(startDate=startDateString, endDate=endDateString)
         else:
-            summary += "<p><h1>New Data Available for {name} for {startDate}</h1></p>".format(name=self.Name, endDate=endDateString)
+            summary += "<p><h1>New Data Available for {name} for {startDate}</h1></p>".format(name=self.Name, startDate=startDateString)
         
         summary += "<br>"
         if self.newFreeInstallsTotal > 0:
