@@ -98,6 +98,7 @@ Usage
     -f               Downloads the ratings and reviews RSS feed for the specified app ids
     -c               List of country codes to download the rating and review data for
 
+    # Note - Feeds are ONLY downloaded when a new daily report is downloaded. Or a new filler report is created as no events occurred that day.
     # Multiple app ids can be provided. You can find your app id by logging into iTunes Connect and looking at the page for your app for the Apple Identifier.
     # Multiple country codes can be provided. These are the standard two letter codes, eg. US = United States of America.
 
