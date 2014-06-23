@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# Harvest Reports v0.1.2
+# Harvest Reports v0.1.3
 # Copyright (c) 2014 Iain McManus. All rights reserved.
 #
 # Harvest Reports is a wrapper around Apple's AutoIngestion Java Class.
@@ -32,576 +32,35 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import datetime, os, sys, subprocess, getopt, gzip, time, smtplib, math, csv
+import csv
+import datetime
+import feedparser
+import getopt
+import gzip
+import math
+import os
+import smtplib
+import socket
+import subprocess
+import sys
+import time
 
-import numpy as np
-import matplotlib.pyplot as plt
+from unidecode import unidecode
 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
 
-class ReportTypes:
-    BasicSummary, DetailedSummary = range(2)
+from SalesReportFile import SalesReportFile
+from SKUData import SKUData
 
-class FieldRemapper:
-    CountryFromCode = dict()
-    CurrencyFromCode = dict()
-    ProductTypeFromCode = dict()
-    PromoTypeFromCode = dict()
-    
-    def __init__(self):
-        with open('fields_countries.csv', mode='r') as countriesFile:
-            reader = csv.reader(countriesFile)
-            self.CountryFromCode = {rows[0]:rows[1] for rows in reader}
-            
-        with open('fields_currencies.csv', mode='r') as currenciesFile:
-            reader = csv.reader(currenciesFile)
-            self.CurrencyFromCode = {rows[0]:rows[1] for rows in reader}
-            
-        with open('fields_productTypes.csv', mode='r') as productTypesFile:
-            reader = csv.reader(productTypesFile)
-            self.ProductTypeFromCode = {rows[0]:rows[1] for rows in reader}
-            
-        with open('fields_promoCodes.csv', mode='r') as promoCodesFile:
-            reader = csv.reader(promoCodesFile)
-            self.PromoTypeFromCode = {rows[0]:rows[1] for rows in reader}
-            
-        if len(self.CountryFromCode) == 0:
-            print "Input file fields_countries.csv could not be found. Countries will be listed as their code"
-        if len(self.CurrencyFromCode) == 0:
-            print "Input file fields_currencies.csv could not be found. Currencies will be listed as their code"
-        if len(self.ProductTypeFromCode) == 0:
-            print "Input file fields_productTypes.csv could not be found. Product types will be listed as their code"
-        if len(self.PromoTypeFromCode) == 0:
-            print "Input file fields_promoCodes.csv could not be found. Promo codes will be listed as their code"
-
-class SalesReportFile:
-    fields = [
-              ["Provider"],
-              ["Provider Country"],
-              ["SKU"],
-              ["Developer"],
-              ["Title"],
-              ["Version"],
-              ["Product Type Identifier"],
-              ["Units"],
-              ["Developer Proceeds (per item)"],
-              ["Begin Date"],
-              ["End Date"],
-              ["Customer Currency"],
-              ["Country Code"],
-              ["Currency of Proceeds"],
-              ["Apple Identifier"],
-              ["Customer Price"],
-              ["Promo Code"],
-              ["Parent Identifier"],
-              ["Subscription"],
-              ["Period"],
-              ["Category"]
-             ]
-
-    def __init__(self, reportFile, isNewFile, fieldRemapper):
-        self.data = []
-        self.isNewFile = isNewFile
-        self.fileName = reportFile
-        
-        # stream in the downloaded report file
-        reportFileHandle = open(reportFile, 'r')
-        reportFileContents = reportFileHandle.readlines()
-        reportFileHandle.close()
-        
-        # parse the report data
-        firstLine = True
-        for reportFileLine in reportFileContents:
-            if firstLine:
-                firstLine = False
-                continue
+from Common import FieldRemapper
+from Common import RatingsSummaryFields
+from Common import ReportTypes
+from Common import RSSFields
                 
-            cleanedLineElements = reportFileLine.strip().split('\t')
-         
-            # extract and process the fields as required
-            extractedLine = dict()
-            for fieldIndex in range(0, len(cleanedLineElements)):
-                fieldName = self.fields[fieldIndex][0]
-                fieldValue = cleanedLineElements[fieldIndex].strip()
-                
-                # some fields require additional processing to remap to actual values or coerce types
-                if len(fieldValue) > 0:
-                    if fieldName == "Product Type Identifier" and len(fieldRemapper.ProductTypeFromCode) > 0:
-                        fieldValue = fieldRemapper.ProductTypeFromCode[fieldValue]
-                    if fieldName == "Provider Country" and len(fieldRemapper.CountryFromCode) > 0:
-                        fieldValue = fieldRemapper.CountryFromCode[fieldValue]
-                    if fieldName == "Customer Currency" and len(fieldRemapper.CurrencyFromCode) > 0:
-                        fieldValue = fieldRemapper.CurrencyFromCode[fieldValue]
-                    if fieldName == "Country Code" and len(fieldRemapper.ProductTypeFromCode) > 0:
-                        fieldValue = fieldRemapper.CountryFromCode[fieldValue]
-                    if fieldName == "Currency of Proceeds" and len(fieldRemapper.CountryFromCode) > 0:
-                        fieldValue = fieldRemapper.CurrencyFromCode[fieldValue]
-                    if fieldName == "Promo Code" and len(fieldRemapper.PromoTypeFromCode) > 0:
-                        fieldValue = fieldRemapper.PromoTypeFromCode[fieldValue]
-                        
-                    if fieldName == "Developer Proceeds (per item)":
-                        fieldValue = float(fieldValue)
-                    if fieldName == "Customer Price":
-                        fieldValue = float(fieldValue)
-                    if fieldName == "Units":
-                        fieldValue = int(fieldValue)
-                    if fieldName == "Begin Date":
-                        fieldValue = (datetime.datetime.strptime(fieldValue, "%m/%d/%Y")).date()
-                    if fieldName == "End Date":
-                        fieldValue = (datetime.datetime.strptime(fieldValue, "%m/%d/%Y")).date()
-                
-                extractedLine.update({fieldName : fieldValue})
-
-            # pad out missing fields. sometimes the reports drop off entries for old data
-            for fieldIndex in range(0, len(self.fields)):
-                fieldName = self.fields[fieldIndex][0]
-                
-                if not fieldName in extractedLine:
-                    extractedLine.update({fieldName : None})
-                
-            self.data.append(extractedLine)
-
-class SKUData:
-    def __init__(self, basePath, reportLines, fieldRemapper):
-        self.rawData = reportLines
-        
-        self.SKU = "Unknown"
-        self.Name = "Unknown"
-        
-        self.unitsByVersion = dict()
-        self.allInstallsTotal = 0
-        self.paidInstallsTotal = 0
-        self.freeInstallsTotal = 0
-        self.proceedsByVersion = dict()
-        self.proceedsTotal = 0
-        self.updatesByVersion = dict()
-        self.promoCodesByVersion = dict()
-        self.promoCodesTotal = 0
-        self.versions = []
-        self.paidInstallsByDate = dict()
-        self.freeInstallsByDate = dict()
-        self.allInstallsByDate = dict()
-        self.updatesByDate = dict()
-        self.proceedsByDate = dict()
-        self.paidInstallsByCountry = dict()
-        self.freeInstallsByCountry = dict()
-        self.allInstallsByCountry = dict()
-
-        self.newPaidInstallsTotal = 0
-        self.newFreeInstallsTotal = 0
-        self.newAllInstallsTotal = 0
-        self.newProceedsTotal = 0
-        self.newUpdatesTotal = 0
-        self.newPromoCodesTotal = 0
-        self.hasNewData = False
-        self.newPaidInstallsByCountry = dict()
-        self.newFreeInstallsByCountry = dict()
-        self.newAllInstallsByCountry = dict()
-        self.newDataDates = []
-        
-        self.rawData.sort(key = lambda x: x[1]["Begin Date"])
-        
-        self.Graphs = dict()
-        
-        # process each report line in order of date and compile the summary
-        for [isNewData, reportLine] in self.rawData:
-            if self.SKU == "Unknown" and len(reportLine["SKU"].strip()) > 0:
-                self.SKU = reportLine["SKU"]
-            if self.Name == "Unknown" and len(reportLine["Title"].strip()) > 0:
-                self.Name = reportLine["Title"]
-            
-            startDate = reportLine["Begin Date"]
-            
-            version = reportLine["Version"]
-            units = reportLine["Units"]
-            proceedsPerItem = reportLine["Developer Proceeds (per item)"]
-            country = reportLine["Country Code"]
-            proceeds = units * proceedsPerItem
-            
-            self.proceedsTotal += proceeds
-            
-            # check if new data is present and setup some basic details
-            if isNewData:
-                self.newProceedsTotal += proceeds
-                self.hasNewData = True
-                self.newDataDates.append(startDate)
-            
-            # record all versions
-            if not version in self.versions:
-                self.versions.append(version)
-            
-            # ensure the date is recorded for all arrays
-            if not startDate in self.updatesByDate:
-                self.updatesByDate.update({startDate : 0})
-            if not startDate in self.allInstallsByDate:
-                self.allInstallsByDate.update({startDate : 0})
-            if not startDate in self.paidInstallsByDate:
-                self.paidInstallsByDate.update({startDate : 0})
-            if not startDate in self.freeInstallsByDate:
-                self.freeInstallsByDate.update({startDate : 0})
-            if not startDate in self.proceedsByDate:
-                self.proceedsByDate.update({startDate : 0})
-            
-            # the report line is for updates
-            if "Update" in reportLine["Product Type Identifier"]:
-                self.updatesByVersion[version] = self.updatesByVersion.setdefault(version, 0) + units
-                self.updatesByDate[startDate] = self.updatesByDate.setdefault(startDate, 0) + units
-            
-                if isNewData:
-                    self.newUpdatesTotal += units
-            else: # the report line is for sales
-                self.allInstallsTotal += units
-                
-                self.unitsByVersion[version] = self.unitsByVersion.setdefault(version, 0) + units
-                self.allInstallsByDate[startDate] = self.allInstallsByDate.setdefault(startDate, 0) + units
-                self.allInstallsByCountry[country] = self.allInstallsByCountry.setdefault(country, 0) + units
-                self.proceedsByDate[startDate] = self.proceedsByDate.setdefault(startDate, 0) + proceeds
-                self.proceedsByVersion[version] = self.proceedsByVersion.setdefault(version, 0) + proceeds
-            
-                if isNewData:
-                    self.newAllInstallsTotal += units
-                
-                    self.newAllInstallsByCountry[country] = self.newAllInstallsByCountry.setdefault(country, 0) + units
-                
-                # record the count of promo codes used
-                if reportLine["Promo Code"] != None and len(reportLine["Promo Code"]) > 0:
-                    self.promoCodesTotal += units
-                    
-                    self.promoCodesByVersion[version] = self.promoCodesByVersion.setdefault(version, 0) + units
-                        
-                    if isNewData:
-                        self.newPromoCodesTotal += units
-                
-                # was this a sale?
-                if proceeds > 0:
-                    self.paidInstallsTotal += units
-                    
-                    self.paidInstallsByDate[startDate] = self.paidInstallsByDate.setdefault(startDate, 0) + units
-                    self.paidInstallsByCountry[country] = self.paidInstallsByCountry.setdefault(country, 0) + units
-            
-                    if isNewData:
-                        self.newPaidInstallsTotal += units
-                
-                        self.newPaidInstallsByCountry[country] = self.newPaidInstallsByCountry.setdefault(country, 0) + units
-                else: # otherwise it was a free installs
-                    self.freeInstallsTotal += units
-                    
-                    self.freeInstallsByDate[startDate] = self.freeInstallsByDate.setdefault(startDate, 0) + units
-                    self.freeInstallsByCountry[country] = self.freeInstallsByCountry.setdefault(country, 0) + units
-            
-                    if isNewData:
-                        self.newFreeInstallsTotal += units
-                
-                        self.newFreeInstallsByCountry[country] = self.newFreeInstallsByCountry.setdefault(country, 0) + units
-                
-        self.versions.sort()
-
-        # fill in any missing version data
-        numPreviousVersion = 0
-        self.userRetentionByVersion = dict()
-        for version in self.versions:
-            if not version in self.unitsByVersion:
-                self.unitsByVersion.update({version : 0})
-            if not version in self.updatesByVersion:
-                self.updatesByVersion.update({version : 0})
-            if not version in self.proceedsByVersion:
-                self.proceedsByVersion.update({version : 0.0})
-            if not version in self.promoCodesByVersion:
-                self.promoCodesByVersion.update({version : 0})
-                
-            if numPreviousVersion > 0:
-                proportionRetained = float(self.updatesByVersion[version]) / float(numPreviousVersion)
-                self.userRetentionByVersion.update({version : proportionRetained})
-                
-            numPreviousVersion += self.unitsByVersion[version]
-        
-        # calculate the number on old versions
-        self.numOnOldVersions = self.allInstallsTotal
-        self.numOnOldVersions -= self.updatesByVersion[self.versions[len(self.versions) - 1]]
-        self.numOnOldVersions -= self.unitsByVersion[self.versions[len(self.versions) - 1]]
-        self.legacyUserPercentage = 100.0 * self.numOnOldVersions / self.allInstallsTotal
-        
-        self.generateGraphs(basePath)
-    
-    def printNewData(self):
-        startDateString = self.newDataDates[0].strftime("%d %b %Y")
-        endDateString = self.newDataDates[-1].strftime("%d %b %Y")
-        if startDateString != endDateString:
-            print "New Data Available for {name}".format(name=self.Name)
-            print "From {startDate} to {endDate}".format(startDate=startDateString, endDate=endDateString)
-        else:
-            print "New Data Available for {name} for {startDate}".format(name=self.Name, startDate=startDateString)
-        
-        if self.newFreeInstallsTotal > 0:
-            print "    Free Installs       : {units:6}".format(units=self.newFreeInstallsTotal)
-        if self.newPaidInstallsTotal > 0:
-            print "    Sales               : {units:6}".format(units=self.newPaidInstallsTotal)
-        if self.newAllInstallsTotal > 0:
-            print "    Total Installs      : {units:6}".format(units=self.newAllInstallsTotal)
-            
-        if self.promoCodesTotal > 0:
-            print "    Promo Codes Used    : {promoCodes:6}".format(promoCodes=self.newPromoCodesTotal)
-        print "    Proceeds            : {proceeds:6.02f}".format(proceeds=self.newProceedsTotal)
-        print "    Updates             : {updates:6}".format(updates=self.newUpdatesTotal)
-        
-    def getReport_HTML(self):
-        report = "<p><h1>Sales Report for {name}</h1></p>".format(name=self.Name)
-        if self.freeInstallsTotal > 0:
-            report += "<p><b>Free Installs</b>       : {units:6}</p>".format(units=self.freeInstallsTotal)
-        if self.paidInstallsTotal > 0:
-            report += "<p><b>Sales</b>               : {units:6}</p>".format(units=self.paidInstallsTotal)
-        if self.allInstallsTotal > 0:
-            report += "<p><b>Total Installs</b>      : {units:6}</p>".format(units=self.allInstallsTotal)
-        
-        if self.promoCodesTotal > 0:
-            report += "<p><b>Promo Codes Used</b>    : {promoCodes:6}</p>".format(promoCodes=self.promoCodesTotal)
-            
-        report += "<p><b>Proceeds</b>            : {proceeds:6.02f}</p>".format(proceeds=self.proceedsTotal)
-        report += "<p><b>Users Not on Latest</b> : {legacyUsers:3.01f}%</p>".format(legacyUsers=self.legacyUserPercentage)
-
-        report += "<p><h2>Version Breakdown</h2></p>"
-        report += "<ul>"
-        
-        for version in reversed(self.versions):
-            report += "<li><b>{version}</b>".format(version=version)
-            report += "<ul>"
-            
-            report += "<li>{installed:6} installs</li>".format(installed=self.unitsByVersion[version])
-            report += "<li>{updates:6} installs updated to this version</li>".format(updates=self.updatesByVersion[version])
-            if self.promoCodesByVersion[version] > 0:
-                report += "<li>{promoCodes:6} promo codes used for this version</li>".format(promoCodes=self.promoCodesByVersion[version])
-            report += "<li>{proceeds:6.02f} earned from this version</li>".format(proceeds=self.proceedsByVersion[version])
-            
-            if version in self.userRetentionByVersion:
-                report += "<li>{retainedPct:3.1f}% of users upgraded to this version</li>".format(retainedPct=self.userRetentionByVersion[version]*100.0)
-                
-            report += "</ul>"
-        report += "</ul>"
-        
-        return report
-    
-    def getEmailSummary_HTML(self):
-        summary = ""
-        
-        startDateString = self.newDataDates[0].strftime("%d %b %Y")
-        endDateString = self.newDataDates[-1].strftime("%d %b %Y")
-        if startDateString != endDateString:
-            summary += "<p><h1>New Data Available for {name}</h1></p>".format(name=self.Name)
-            summary += "<p><h2>Data is from {startDate} to {endDate}</h2></p>".format(startDate=startDateString, endDate=endDateString)
-        else:
-            summary += "<p><h1>New Data Available for {name} for {startDate}</h1></p>".format(name=self.Name, startDate=startDateString)
-        
-        summary += "<br>"
-        if self.newFreeInstallsTotal > 0:
-            summary += "<b>Free Installs</b>             : {units:6}".format(units=self.newFreeInstallsTotal)
-            summary += "<br>"
-        if self.newPaidInstallsTotal > 0:
-            summary += "<b>Sales</b>                     : {units:6}".format(units=self.newPaidInstallsTotal)
-            summary += "<br>"
-        if self.newAllInstallsTotal > 0:
-            summary += "<b>Total Installs</b>            : {units:6}".format(units=self.newAllInstallsTotal)
-            summary += "<br>"
-        if self.promoCodesTotal > 0:
-            summary += "<b>Promo Codes Used</b>    : {promoCodes:6}".format(promoCodes=self.newPromoCodesTotal)
-            summary += "<br>"
-        summary += "<b>Proceeds</b>            : {proceeds:6.02f}".format(proceeds=self.newProceedsTotal)
-        summary += "<br>"
-        summary += "<b>Updates</b>             : {updates:6}".format(updates=self.newUpdatesTotal)
-        summary += "<br>"
-        
-        return summary
-    
-    def getEmailSummary_PlainText(self):
-        summary = ""
-        
-        summary += "New Data Available for {name}".format(name=self.Name)
-        summary += "\r\n"
-        if self.newPaidInstallsTotal > 0:
-            summary += "    Free Installs       : {units:6}".format(units=self.newFreeInstallsTotal)
-        if self.newFreeInstallsTotal > 0:
-            summary += "    Sales               : {units:6}".format(units=self.newPaidInstallsTotal)
-        if self.newAllInstallsTotal > 0:
-            summary += "    Total Installs      : {units:6}".format(units=self.newAllInstallsTotal)
-        if self.promoCodesTotal > 0:
-            summary += "    Promo Codes Used    : {promoCodes:6}".format(promoCodes=self.newPromoCodesTotal)
-        summary += "\r\n"
-        summary += "    Proceeds            : {proceeds:6.02f}".format(proceeds=self.newProceedsTotal)
-        summary += "\r\n"
-        summary += "    Updates             : {updates:6}".format(updates=self.newUpdatesTotal)
-        summary += "\r\n"
-        
-        return summary
-                
-    def printSummary(self, reportType):
-        print "Summary for {name}".format(name=self.Name)
-        if self.freeInstallsTotal > 0:
-            print "    Free Installs       : {units:6}".format(units=self.freeInstallsTotal)
-        if self.paidInstallsTotal > 0:
-            print "    Sales               : {units:6}".format(units=self.paidInstallsTotal)
-        if self.allInstallsTotal > 0:
-            print "    Total Installs      : {units:6}".format(units=self.allInstallsTotal)
-        if self.promoCodesTotal > 0:
-            print "    Promo Codes Used    : {promoCodes:6}".format(promoCodes=self.promoCodesTotal)
-        print "    Proceeds            : {proceeds:6.02f}".format(proceeds=self.proceedsTotal)
-        print "    Users Not on Latest : {legacyUsers:3.01f}%".format(legacyUsers=self.legacyUserPercentage)
-        
-        if reportType == ReportTypes.DetailedSummary:
-            print "    Version Breakdown"
-            
-            for version in reversed(self.versions):
-                print "      {version}".format(version=version)
-            
-                print "        Installs         : {installed:6} units".format(installed=self.unitsByVersion[version])
-                print "        Updates          : {updates:6} units".format(updates=self.updatesByVersion[version])
-                if self.promoCodesByVersion[version] > 0:
-                    print "        Promo Codes Used : {promoCodes:6}".format(promoCodes=self.promoCodesByVersion[version])
-                print "        Proceeds         : {proceeds:6.02f}".format(proceeds=self.proceedsByVersion[version])
-                if version in self.userRetentionByVersion:
-                    print "        Users Retained   : {retainedPct:3.1f}% of existing users upgraded to this version".format(retainedPct=self.userRetentionByVersion[version]*100.0)
-
-    def saveUnitsGraph(self, basePath, installs, updates, entryDates):
-        barWidth = 0.35
-        barIndices = np.arange(len(entryDates))
-    
-        maxY = max(max(installs), max(updates)) + 1
-    
-        figure, unitsGraph = plt.subplots()
-        installsRects = unitsGraph.bar(barIndices, installs, barWidth, color='g')
-        updatesRects = unitsGraph.bar(barIndices+barWidth, updates, barWidth, color='b')
-        plt.ylim(ymax=maxY, ymin=0)
-    
-        unitsGraph.set_ylabel("Units")
-        unitsGraph.set_title("Sales Data for {name}".format(name=self.Name))
-        unitsGraph.set_xticks(barIndices+barWidth)
-        unitsGraph.set_xticklabels(entryDates, rotation=-90)
-
-        unitsGraph.legend((installsRects[0], updatesRects[0]), ('Installs', 'Updates'), bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    
-        def autolabel(rects):
-            for rect in rects:
-                height = rect.get_height()
-                if height > 0:
-                    unitsGraph.text(rect.get_x()+rect.get_width()/2., 1.05*height, '%d'%int(height), ha='center', va='bottom')
-
-        autolabel(installsRects)
-        autolabel(updatesRects)
-    
-        fileName = os.path.join(basePath, self.SKU + "_AllInstallsAndUpdates.png")
-        plt.savefig(fileName,bbox_inches='tight',dpi=100)
-        plt.clf()
-        plt.cla()
-        
-        self.Graphs.update({"AllInstallsAndUpdates":fileName})
-
-    def saveProceedsGraph(self, basePath, proceeds, entryDates):
-        barWidth = 0.7
-        barIndices = np.arange(len(entryDates))
-    
-        maxY = math.ceil(max(proceeds)) + 1
-    
-        figure, unitsGraph = plt.subplots()
-        proceedsRects = unitsGraph.bar(barIndices, proceeds, barWidth, color='g')
-        plt.ylim(ymax=maxY, ymin=0)
-    
-        unitsGraph.set_ylabel("Amount Earned")
-        unitsGraph.set_title("Proceeds for {name}".format(name=self.Name))
-        unitsGraph.set_xticks(barIndices+barWidth)
-        unitsGraph.set_xticklabels(entryDates, rotation=-90)
-    
-        def autolabel(rects):
-            for rect in rects:
-                height = rect.get_height()
-                if height > 0:
-                    unitsGraph.text(rect.get_x()+rect.get_width()/2., 1.05*height, '%1.2f'%float(height), ha='center', va='bottom', rotation=-90)
-
-        autolabel(proceedsRects)
-    
-        fileName = os.path.join(basePath, self.SKU + "_Proceeds.png")
-        plt.savefig(fileName,bbox_inches='tight',dpi=100)
-        plt.clf()
-        plt.cla()
-        
-        self.Graphs.update({"Proceeds":fileName})
-    
-    def generateAndSaveCountryInstallsChart(self, fileName, title, countries, installs):
-        for countryIdx in range(0, len(countries)):
-            countries[countryIdx] += " ({installs})".format(installs=installs[countryIdx])
-        
-        plt.figure(1, figsize=(6,6))
-    
-        pieWedges = plt.pie(installs, labels=countries, shadow=False)
-        
-        # make the edges white (From http://nxn.se/post/46440196846/making-nicer-looking-pie-charts-with-matplotlib)
-        for wedge in pieWedges[0]:
-            wedge.set_edgecolor('white')
-            
-        plt.title(title)
-    
-        plt.savefig(fileName, bbox_inches='tight', dpi=100)
-        plt.clf()
-        plt.cla()
-
-    def saveCountryDistributionGraphs(self, basePath):
-        reportList = dict();
-        reportList.update({"PaidInstalls" : ["Sales",          self.paidInstallsByCountry, self.newPaidInstallsByCountry]})
-        reportList.update({"FreeInstalls" : ["Free Installs",  self.freeInstallsByCountry, self.newFreeInstallsByCountry]})
-        reportList.update({"AllInstalls"  : ["Total Installs", self.allInstallsByCountry, self.newAllInstallsByCountry]})
-        
-        for reportName in reportList:
-            [reportTitle, installsByCountry, newInstallsByCountry] = reportList[reportName]
-            
-            countries = installsByCountry.keys()
-            installs = installsByCountry.values()
-            
-            fileName = os.path.join(basePath, self.SKU + "_{reportName}ByCountry.png".format(reportName=reportName))
-            self.generateAndSaveCountryInstallsChart(fileName, "{reportTitle} by Country".format(reportTitle=reportTitle), countries, installs)
-            self.Graphs.update({"{reportName}ByCountry".format(reportName=reportName):fileName})
-    
-            if self.hasNewData and len(newInstallsByCountry) > 0:
-                countries = newInstallsByCountry.keys()
-                installs = newInstallsByCountry.values()
-                
-                fileName = os.path.join(basePath, self.SKU + "_New{reportName}ByCountry.png".format(reportName=reportName))
-                self.generateAndSaveCountryInstallsChart(fileName, "New {reportTitle} by Country".format(reportTitle=reportTitle), countries, installs)
-                self.Graphs.update({"New{reportName}ByCountry".format(reportName=reportName):fileName})
-
-    def generateGraphs(self, basePath):
-        startDate = datetime.date.today()
-    
-        entryDates = []
-    
-        reportDates = self.allInstallsByDate.keys()
-        reportDates.sort()
-    
-        installs = []
-        updates = []
-        proceeds = []
-    
-        # build up the data for the last 30 days
-        for dayOffset in range(30, 0, -1):
-            searchDate = startDate - datetime.timedelta(dayOffset)
-        
-            entryDates.append(searchDate)
-        
-            if searchDate in reportDates:
-                installs.append(self.allInstallsByDate[searchDate])
-                updates.append(self.updatesByDate[searchDate])
-                proceeds.append(self.proceedsByDate[searchDate])
-            else:
-                installs.append(0)
-                updates.append(0)
-                proceeds.append(0)
-    
-        self.saveUnitsGraph(basePath, installs, updates, entryDates)
-        self.saveProceedsGraph(basePath, proceeds, entryDates)
-        self.saveCountryDistributionGraphs(basePath)
-                
-def processDailiesIn(basePath, downloadedFiles, reportType):
+def processDailiesIn(basePath, downloadedFiles, reportType, fieldRemapper):
     salesReportObjects = []
-    
-    fieldRemapper = FieldRemapper()
     
     # build the list of all of the files
     for filename in os.listdir(basePath):
@@ -640,10 +99,6 @@ def processDailiesIn(basePath, downloadedFiles, reportType):
     for skuSummary in skuData.values():
         if skuSummary.hasNewData:
             skuSummary.printNewData()
-    
-    # print out the report
-    for skuSummary in skuData.values():
-        skuSummary.printSummary(reportType)
     
     return skuData
     
@@ -716,6 +171,177 @@ def downloadDailies(propertiesFile, vendorId, numDaysBack, overwriteExistingData
                 print "Skipped existing data for {day:02}/{month:02}/{year:04}".format(day=requestedDate.day, month=requestedDate.month, year=requestedDate.year)
     
     return [addedPlaceHolderFileForEventlessDay, downloadedFiles]
+
+def loadFeedFile(filePath):
+    feedEntries = dict()
+    
+    if not os.path.exists(filePath):
+        return feedEntries
+    
+    with open(filePath, mode="rb") as savedFeed:
+        reader = csv.reader(savedFeed, delimiter='\t')
+        for row in reader:
+            entry = {RSSFields.Version:    row[RSSFields.Version], 
+                     RSSFields.Title:      row[RSSFields.Title], 
+                     RSSFields.Rating:     row[RSSFields.Rating],
+                     RSSFields.Summary:    row[RSSFields.Summary],
+                     RSSFields.UniqueId:   row[RSSFields.UniqueId]}
+            feedEntries.update({row[RSSFields.UniqueId] : entry})
+    
+    return feedEntries
+    
+def writeFeedFile(filePath, feedEntries):
+    feedFile = open(filePath, "wb")
+    feedWriter = csv.writer(feedFile, delimiter="\t", quotechar="\"", quoting=csv.QUOTE_ALL)
+    
+    for entry in feedEntries.values():
+        feedWriter.writerow([entry[RSSFields.Version], 
+                             entry[RSSFields.Title],
+                             entry[RSSFields.Rating],
+                             entry[RSSFields.Summary],
+                             entry[RSSFields.UniqueId]])
+                             
+    feedFile.close()
+
+def identifyNewFeedEntries(previousFeedEntries, feedEntries):
+    previousUniqueIds = previousFeedEntries.keys()
+    currentUniqueIds = feedEntries.keys()
+    
+    return [feedEntries[uniqueId] for uniqueId in currentUniqueIds if uniqueId not in previousUniqueIds]
+    
+def analyseFeedEntries(feedEntries, newFeedEntries):
+    entrySummary = dict()
+    
+    lifetimeAverageRating = 0
+    perVersionAverageRatings = dict()
+    perVersionRatingsCount = dict()
+    
+    # build up the average rating information for all time and per version
+    for feedEntry in feedEntries.values():
+        appVersion = feedEntry[RSSFields.Version]
+        appRating = feedEntry[RSSFields.Rating]
+        
+        lifetimeAverageRating += appRating
+        
+        perVersionAverageRatings[appVersion] = perVersionAverageRatings.setdefault(appVersion, 0) + appRating
+        perVersionRatingsCount[appVersion] = perVersionRatingsCount.setdefault(appVersion, 0) + 1
+        
+    # calculate the average rating if possible
+    if len(feedEntries) > 0:
+        lifetimeAverageRating = float(lifetimeAverageRating) / len(feedEntries)
+        
+    # calculate the per version averages
+    for appVersion in perVersionAverageRatings.keys():
+        perVersionAverageRatings[appVersion] = float(perVersionAverageRatings[appVersion]) / perVersionRatingsCount[appVersion]
+        
+    # add the basic summary info
+    entrySummary.update({RatingsSummaryFields.LifetimeAverageRating     : lifetimeAverageRating})
+    entrySummary.update({RatingsSummaryFields.LifetimeRatingSamples     : len(feedEntries)})
+    entrySummary.update({RatingsSummaryFields.AverageRatingPerVersion   : perVersionAverageRatings})
+    entrySummary.update({RatingsSummaryFields.NumberOfRatingsPerVersion : perVersionRatingsCount})
+    entrySummary.update({RatingsSummaryFields.NumberOfNewRatings        : len(newFeedEntries)})
+    
+    return entrySummary
+    
+def generateRatingsAndReviewsSummaryForApp(ratingsAndReviewsForApp):
+    cumulativeAverage = 0.0
+    cumulativeAverageSamples = 0
+    cumulativeNumberOfNewRatings = 0
+    
+    cumulativeVersionAverage = dict()
+    cumulativeVersionAverageSamples = dict()
+    
+    # combine the per country data into a single set of statistics for the app as a whole
+    for ratingsAndReviews in ratingsAndReviewsForApp.values():
+        averageRating = ratingsAndReviews[RatingsSummaryFields.LifetimeAverageRating]
+        averageRatingSamples = ratingsAndReviews[RatingsSummaryFields.LifetimeRatingSamples]
+        numberOfNewRatings = ratingsAndReviews[RatingsSummaryFields.NumberOfNewRatings]
+        
+        # update the running totals
+        cumulativeAverage += averageRating * averageRatingSamples
+        cumulativeAverageSamples += averageRatingSamples
+        cumulativeNumberOfNewRatings += numberOfNewRatings
+        
+        # extract the per version ratings
+        perVersionAverageRatings = ratingsAndReviews[RatingsSummaryFields.AverageRatingPerVersion]
+        perVersionAverageRatingSamples = ratingsAndReviews[RatingsSummaryFields.NumberOfRatingsPerVersion]
+        for version in perVersionAverageRatings.keys():
+            versionAverage = perVersionAverageRatings[version]
+            versionAverageSamples = perVersionAverageRatingSamples[version]
+            
+            cumulativeVersionAverage[version] = cumulativeVersionAverage.setdefault(version, 0.0) + (versionAverage * versionAverageSamples)
+            cumulativeVersionAverageSamples[version] = cumulativeVersionAverageSamples.setdefault(version, 0) + versionAverageSamples
+            
+    # calculate the lifetime averages
+    if cumulativeAverageSamples > 0:
+        cumulativeAverage /= cumulativeAverageSamples
+    
+    # calculate the per version averages
+    for version in cumulativeVersionAverage.keys():
+        if cumulativeVersionAverageSamples[version] > 0:
+            cumulativeVersionAverage[version] /= cumulativeVersionAverageSamples[version]
+            
+    # add the calculated data
+    ratingsAndReviewsForApp.update({RatingsSummaryFields.LifetimeAverageRating     : cumulativeAverage})
+    ratingsAndReviewsForApp.update({RatingsSummaryFields.LifetimeRatingSamples     : cumulativeAverageSamples})
+    ratingsAndReviewsForApp.update({RatingsSummaryFields.AverageRatingPerVersion   : cumulativeVersionAverage})
+    ratingsAndReviewsForApp.update({RatingsSummaryFields.NumberOfRatingsPerVersion : cumulativeVersionAverageSamples})
+    ratingsAndReviewsForApp.update({RatingsSummaryFields.NumberOfNewRatings        : cumulativeNumberOfNewRatings})
+
+def downloadRSSFeed(basePath, appIds, countryCodes):
+    ratingsAndReviewsFeed = dict()
+    newRatingsAndReviews = False
+    
+    socket.setdefaulttimeout(120)
+    
+    # for each app Id and country generate the feed URL and attempt to download the data
+    for appId in appIds:
+        ratingsAndReviewsForApp = dict()
+        
+        for countryCode in countryCodes:
+            feedURL = "https://itunes.apple.com/{countryCode}/rss/customerreviews/id={appId}/sortBy=mostRecent/xml".format(countryCode=countryCode, appId=appId)
+            
+            feed = feedparser.parse(feedURL)
+            
+            # build up the list of feed entries
+            feedEntries = dict()
+            for entry in feed.entries:
+                if "im_version" in entry:
+                    feedEntry = {RSSFields.Version:    unidecode(entry["im_version"]), 
+                                 RSSFields.Title:      unidecode(entry["title"]), 
+                                 RSSFields.Rating:     int(unidecode(entry["im_rating"])),
+                                 RSSFields.Summary:    unidecode(entry["summary"]),
+                                 RSSFields.UniqueId:   unidecode(entry["id"])}
+                    feedEntries.update({unidecode(entry["id"]) : feedEntry})
+                                  
+            downloadedFeedSummary = os.path.join(basePath, "RatingsAndReviews_{appId}_{countryCode}.csv".format(appId=appId, countryCode=countryCode))
+            
+            # load the previous set of feed entries
+            previousFeedEntries = loadFeedFile(downloadedFeedSummary)
+            
+            # identify new feed entries
+            newFeedEntries = identifyNewFeedEntries(previousFeedEntries, feedEntries)
+            
+            if len(newFeedEntries) > 0:
+                newRatingsAndReviews = True
+            
+            # save out the list of new entries. no need to merge as the feedEntries is the full set
+            writeFeedFile(downloadedFeedSummary, feedEntries)
+            
+            # analyse the feed data
+            feedAnalysis = analyseFeedEntries(feedEntries, newFeedEntries)
+            
+            # add in the per country data
+            ratingsAndReviewsForApp.update({countryCode : feedAnalysis})
+        
+        # add in the per app data
+        ratingsAndReviewsFeed.update({appId : ratingsAndReviewsForApp})
+    
+    # generate the summary data
+    for ratingsAndReviewsForApp in ratingsAndReviewsFeed.values():
+        generateRatingsAndReviewsSummaryForApp(ratingsAndReviewsForApp)
+    
+    return [newRatingsAndReviews, ratingsAndReviewsFeed]
 
 def generateHTMLReport(basePath, perSKUData):
     report_HTML = """\
@@ -813,13 +439,18 @@ def emailReportForNewData(downloadedFiles, perSKUData):
         s.sendmail(emailMessage["From"], [emailMessage["To"]], emailMessage.as_string())
     except (smtplib.SMTPServerDisconnected):
         print "Connection unexpectedly closed: [Errno 54] Connection reset by peer"
+        
+        # we delete the downloaded files on failure to send email so that it will retry
+        for downloadedFile in downloadedFiles:
+            os.remove(downloadedFile)
+        
         sys.exit(-1)
     else:
         s.quit()
     
 def usage():
     print "Usage:"
-    print "      harvestReports -p <Properties File> -v <Vendor Id> [-d <Days Back>] [-rd|-rv] [-e] [-s]"
+    print "      harvestReports -p <Properties File> -v <Vendor Id> [-d <Days Back>] [-rd|-rv] [-e] [-s] [-f AppId1,AppId2] [-c CountryCode1,CountryCode2]"
     print ""
     print "          Properties File  Path to the .properties file with the username/password for iTunes Connect"
     print "          Vendor Id        Your vendor Id"
@@ -829,9 +460,11 @@ def usage():
     print "          -rv              Shows verbose output"
     print "          -e               Sends an email if there is new data"
     print "          -s               Saves HTML report"
+    print "          -f               Downloads the ratings and reviews RSS feed for the specified app ids"
+    print "          -c               List of country codes to download the rating and review data for"
 
 def main(argv):
-    print "Harvest Reports v0.1.2"
+    print "Harvest Reports v0.1.3"
     print "Written by Iain McManus"
     print ""
     print "Copyright (c) 2014 Iain McManus. All rights reserved"
@@ -845,11 +478,14 @@ def main(argv):
     reportType = ReportTypes.BasicSummary
     sendEmail = False
     saveHTMLReport = False
+    downloadRatingsAndReviewsFeed = False
+    appIds = []
+    countryCodes = []
     
     essentialArgumentsFoundCount = 0
     
     try:
-        opts, args = getopt.getopt(argv, "hp:v:d:r:oes", ["help", "properties=", "vendorId=", "daysBack=", "report=", "overwrite", "email", "saveHMTL"])
+        opts, args = getopt.getopt(argv, "hp:v:d:r:oesf:-c:", ["help", "properties=", "vendorId=", "daysBack=", "report=", "overwrite", "email", "saveHMTL", "feed:", "countries:"])
     except getopt.GetoptError, exc:
         print exc.msg
         
@@ -879,6 +515,11 @@ def main(argv):
             sendEmail = True
         elif opt in ("-s"):
             saveHTMLReport = True
+        elif opt in ("-f:"):
+            downloadRatingsAndReviewsFeed = True
+            appIds = arg.strip().split(',')
+        elif opt in ("-c:"):
+            countryCodes = arg.strip().split(',')
             
     if essentialArgumentsFoundCount < 2:
         usage()
@@ -888,15 +529,51 @@ def main(argv):
 
     if not os.path.exists(basePath):
         os.makedirs(basePath)
+    
+    fieldRemapper = FieldRemapper()
 
+    # download the report data
     [addedPlaceHolderFileForEventlessDay, downloadedFiles] = downloadDailies(propertiesFile, vendorId, daysBack, overwriteExistingData, basePath, verbose)
     
-    perSKUData = processDailiesIn(basePath, downloadedFiles, reportType)
+    # parse all the report data and build the per SKU analyses
+    perSKUData = processDailiesIn(basePath, downloadedFiles, reportType, fieldRemapper)
+    
+    # summary email can only send if there was new data or a new placeholder was added
+    hasDataForSummaryEmail = (addedPlaceHolderFileForEventlessDay or (len(downloadedFiles) > 0))
+    
+    # download the RSS feed if enabled and we downloaded new data for the day
+    ratingsAndReviewsFeed = None
+    if downloadRatingsAndReviewsFeed and hasDataForSummaryEmail:
+        [newRatingsAndReviews, ratingsAndReviewsFeed] = downloadRSSFeed(basePath, appIds, countryCodes)
+        
+        # merge the ratings data in
+        for skuData in perSKUData.values():
+            # no ratings data present
+            if skuData.AppId not in ratingsAndReviewsFeed:
+                continue
+            
+            reviewDataForSKU = ratingsAndReviewsFeed[skuData.AppId]
+        
+            skuData.lifetimeAverageRating = reviewDataForSKU[RatingsSummaryFields.LifetimeAverageRating]
+            skuData.lifetimeRatingSamples = reviewDataForSKU[RatingsSummaryFields.LifetimeRatingSamples]
+            skuData.numberOfNewRatings = reviewDataForSKU[RatingsSummaryFields.NumberOfNewRatings]
+        
+            perVersionAverage = reviewDataForSKU[RatingsSummaryFields.AverageRatingPerVersion]
+            perVersionAverageSamples = reviewDataForSKU[RatingsSummaryFields.NumberOfRatingsPerVersion]
+        
+            for version in perVersionAverage.keys():
+                skuData.averageRatingPerVersion[version] = perVersionAverage[version]
+                skuData.numberOfRatingsPerVersion[version] = perVersionAverageSamples[version]
+    
+    # print out the report
+    for skuSummary in perSKUData.values():
+        skuSummary.printSummary(reportType)
         
     if saveHTMLReport:
         generateHTMLReport(basePath, perSKUData)
 
-    if (addedPlaceHolderFileForEventlessDay or (len(downloadedFiles) > 0)) and sendEmail:
+    # sales report email will only send if we have a new report downloaded (or a placeholder added due to an eventless day)
+    if hasDataForSummaryEmail and sendEmail:
         emailReportForNewData(downloadedFiles, perSKUData)
 
 if __name__ == '__main__':

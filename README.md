@@ -1,15 +1,16 @@
 Introduction
 ===============
 
-ReportHarvester is a Python based tool for downloading and analysing sales data from iTunes Connect.
+ReportHarvester is a Python based tool for downloading and analysing sales and ratings data from iTunes Connect.
 
-Report Harvester will analyse the downloaded sales data and provide the following information per each application:
+Report Harvester will analyse the downloaded sales and ratings data and provide the following information per each application:
  * Number of installs (total and per version)
  * Number of upgrades (total and per version)
  * Number of promo codes used (total and per version)
  * Proceeds earned (total and per version)
  * Number of users running the latest version
  * Percentage of users retained between versions
+ * Average rating of the app and the number of users who have rated it (total and per version)
  * Graph showing geographic distribution of sales for newly downloaded data and for all time
  * Graph showing sales and updates for the last 30 days
  * Graph showing proceeds for the last 30 days
@@ -39,6 +40,12 @@ Alternatively go to the website for more instructions
 
 ## Install pip
     easy_install pip
+
+## Install FeedParser
+    pip install feedparser
+
+## Install Unidecode
+    pip install unidecode
 
 ## Install NumPy
     pip install numpy
@@ -79,7 +86,7 @@ There are two main areas you must configure:
 Usage
 ===============
 
-##python harvestReports -p <Properties File> -v <Vendor Id> [-d <Days Back>] [-rd|-rv] [-e] [-s]
+##python harvestReports -p <Properties File> -v <Vendor Id> [-d <Days Back>] [-rd|-rv] [-e] [-s] [-f AppId1,AppId2] [-c CountryCode1,CountryCode2]
     Properties File  Path to the .properties file with the username/password for iTunes Connect
     Vendor Id        Your vendor Id
     Days Back        Number of days worth of data back (from now) to retrieve
@@ -88,16 +95,26 @@ Usage
     -rv              Shows verbose output
     -e               Sends an email if there is new data
     -s               Saves HTML report
+    -f               Downloads the ratings and reviews RSS feed for the specified app ids
+    -c               List of country codes to download the rating and review data for
+
+    # Multiple app ids can be provided. You can find your app id by logging into iTunes Connect and looking at the page for your app for the Apple Identifier.
+    # Multiple country codes can be provided. These are the standard two letter codes, eg. US = United States of America.
 
 Examples
 ===============
 
-Download the last 5 days of data and generate a report. Send an email if there is new data
+Download the last 5 days of data and generate a report. Download feeds for app with id 697893360 for Australia and the United Kingdom. Send an email if there is new data.
+    python harvestReports.py -p autoingestion.properties -v <VendorId> -d 5 -e -s -f 697893360 -c AU,UK
+
+    # Note - Replace <VendorId> with your vendor Id
+
+Download the last 5 days of data and generate a report. Send an email if there is new data.
     python harvestReports.py -p autoingestion.properties -v <VendorId> -d 5 -e -s
 
     # Note - Replace <VendorId> with your vendor Id
 
-Download the last 5 days of data and generate a report
+Download the last 5 days of data and generate a report.
     python harvestReports.py -p autoingestion.properties -v <VendorId> -d 5 -s
 
     # Note - Replace <VendorId> with your vendor Id
