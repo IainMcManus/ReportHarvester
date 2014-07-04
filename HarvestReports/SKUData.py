@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# Harvest Reports v0.1.3
+# Harvest Reports v0.1.4
 # Copyright (c) 2014 Iain McManus. All rights reserved.
 #
 # Harvest Reports is a wrapper around Apple's AutoIngestion Java Class.
@@ -54,7 +54,7 @@ class SKUData:
         self.paidInstallsTotal = 0
         self.freeInstallsTotal = 0
         self.proceedsByVersion = dict()
-        self.proceedsTotal = 0
+        self.proceedsTotal = dict()
         self.updatesByVersion = dict()
         self.promoCodesByVersion = dict()
         self.promoCodesTotal = 0
@@ -71,7 +71,7 @@ class SKUData:
         self.newPaidInstallsTotal = 0
         self.newFreeInstallsTotal = 0
         self.newAllInstallsTotal = 0
-        self.newProceedsTotal = 0
+        self.newProceedsTotal = dict()
         self.newUpdatesTotal = 0
         self.newPromoCodesTotal = 0
         self.hasNewData = False
@@ -105,14 +105,20 @@ class SKUData:
             version = reportLine["Version"]
             units = reportLine["Units"]
             proceedsPerItem = reportLine["Developer Proceeds (per item)"]
+            proceedsCurrency = reportLine["Currency Code of Proceeds"]
             country = reportLine["Country Code"]
             proceeds = units * proceedsPerItem
             
-            self.proceedsTotal += proceeds
+            # as the proceeds are a dictionary we only want entries for non zero proceeds
+            if proceeds > 0:
+                self.proceedsTotal[proceedsCurrency] = self.proceedsTotal.setdefault(proceedsCurrency, 0) + proceeds
             
             # check if new data is present and setup some basic details
             if isNewData:
-                self.newProceedsTotal += proceeds
+                # as the proceeds are a dictionary we only want entries for non zero proceeds
+                if proceeds > 0:
+                    self.newProceedsTotal[proceedsCurrency] = self.newProceedsTotal.setdefault(proceedsCurrency, 0) + proceeds
+                    
                 self.hasNewData = True
                 self.newDataDates.append(startDate)
             
@@ -130,7 +136,7 @@ class SKUData:
             if not startDate in self.freeInstallsByDate:
                 self.freeInstallsByDate.update({startDate : 0})
             if not startDate in self.proceedsByDate:
-                self.proceedsByDate.update({startDate : 0})
+                self.proceedsByDate.update({startDate : dict()})
             
             # the report line is for updates
             if "Update" in reportLine["Product Type Identifier"]:
@@ -145,8 +151,16 @@ class SKUData:
                 self.unitsByVersion[version] = self.unitsByVersion.setdefault(version, 0) + units
                 self.allInstallsByDate[startDate] = self.allInstallsByDate.setdefault(startDate, 0) + units
                 self.allInstallsByCountry[country] = self.allInstallsByCountry.setdefault(country, 0) + units
-                self.proceedsByDate[startDate] = self.proceedsByDate.setdefault(startDate, 0) + proceeds
-                self.proceedsByVersion[version] = self.proceedsByVersion.setdefault(version, 0) + proceeds
+                
+                # as the proceeds are a dictionary we only want entries for non zero proceeds
+                if proceeds > 0:
+                    if startDate not in self.proceedsByDate:
+                        self.proceedsByDate.update({startDate: dict()})
+                    self.proceedsByDate[startDate][proceedsCurrency] = self.proceedsByDate[startDate].setdefault(proceedsCurrency, 0) + proceeds
+                
+                    if version not in self.proceedsByVersion:
+                        self.proceedsByVersion.update({version: dict()})
+                    self.proceedsByVersion[version][proceedsCurrency] = self.proceedsByVersion[version].setdefault(proceedsCurrency, 0) + proceeds
             
                 if isNewData:
                     self.newAllInstallsTotal += units
@@ -195,7 +209,7 @@ class SKUData:
             if not version in self.updatesByVersion:
                 self.updatesByVersion.update({version : 0})
             if not version in self.proceedsByVersion:
-                self.proceedsByVersion.update({version : 0.0})
+                self.proceedsByVersion.update({version : dict()})
             if not version in self.promoCodesByVersion:
                 self.promoCodesByVersion.update({version : 0})
             
@@ -209,6 +223,44 @@ class SKUData:
                 self.userRetentionByVersion.update({version : proportionRetained})
                 
             numPreviousVersion += self.unitsByVersion[version]
+        
+        # format the total proceeds string
+        self.proceedsTotalString = ""
+        for currency in self.proceedsTotal.keys():
+            if len(self.proceedsTotalString) > 0:
+                self.proceedsTotalString += ", "
+            self.proceedsTotalString += "{amount} {code}".format(amount=self.proceedsTotal[currency], code=currency)
+        
+        # format the total new proceeds string
+        self.newProceedsTotalString = ""
+        for currency in self.newProceedsTotal.keys():
+            if len(self.newProceedsTotalString) > 0:
+                self.newProceedsTotalString += ", "
+            self.newProceedsTotalString += "{amount} {code}".format(amount=self.newProceedsTotal[currency], code=currency)
+
+        # format the proceeds by date string
+        self.proceedsByDateString = dict()
+        for date in self.proceedsByDate.keys():
+            self.proceedsByDateString.update({date: ""})
+            
+            for currency in self.proceedsByDate[date].keys():
+                if len(self.proceedsByDateString[date]) > 0:
+                    self.proceedsByDateString[date] += ", "
+                self.proceedsByDateString[date] += "{amount} {code}".format(amount=self.proceedsByDate[date][currency], code=currency)
+                
+                if version not in self.proceedsByVersion:
+                    self.proceedsByVersion.update({version, dict()})
+                self.proceedsByVersion[version][proceedsCurrency] = self.proceedsByVersion[version].setdefault(proceedsCurrency, 0) + proceeds
+
+        # format the proceeds by version string
+        self.proceedsByVersionString = dict()
+        for version in self.proceedsByVersion.keys():
+            self.proceedsByVersionString.update({version: ""})
+            
+            for currency in self.proceedsByVersion[version].keys():
+                if len(self.proceedsByVersionString[version]) > 0:
+                    self.proceedsByVersionString[version] += ", "
+                self.proceedsByVersionString[version] += "{amount} {code}".format(amount=self.proceedsByVersion[version][currency], code=currency)
         
         # calculate the number on old versions
         self.numOnOldVersions = self.allInstallsTotal
@@ -238,7 +290,7 @@ class SKUData:
             
         if self.promoCodesTotal > 0:
             print "    Promo Codes Used    : {promoCodes:6}".format(promoCodes=self.newPromoCodesTotal)
-        print "    Proceeds            : {proceeds:6.02f}".format(proceeds=self.newProceedsTotal)
+        print "    Proceeds            : {proceeds}".format(proceeds=self.newProceedsTotalString)
         print "    Updates             : {updates:6}".format(updates=self.newUpdatesTotal)
         
     def getReport_HTML(self):
@@ -258,7 +310,7 @@ class SKUData:
             report += "<b>Number of Ratings</b>         : {ratingCount:6}".format(ratingCount=self.lifetimeRatingSamples)
             report += "<br>"
             
-        report += "<p><b>Proceeds</b>            : {proceeds:6.02f}</p>".format(proceeds=self.proceedsTotal)
+        report += "<p><b>Proceeds</b>            : {proceeds}</p>".format(proceeds=self.proceedsTotalString)
         report += "<p><b>Users Not on Latest</b> : {legacyUsers:3.01f}%</p>".format(legacyUsers=self.legacyUserPercentage)
 
         report += "<p><h2>Version Breakdown</h2></p>"
@@ -272,7 +324,7 @@ class SKUData:
             report += "<li>{updates:6} installs updated to this version</li>".format(updates=self.updatesByVersion[version])
             if self.promoCodesByVersion[version] > 0:
                 report += "<li>{promoCodes:6} promo codes used for this version</li>".format(promoCodes=self.promoCodesByVersion[version])
-            report += "<li>{proceeds:6.02f} earned from this version</li>".format(proceeds=self.proceedsByVersion[version])
+            report += "<li>{proceeds} earned from this version</li>".format(proceeds=self.proceedsByVersionString[version])
             
             if version in self.userRetentionByVersion:
                 report += "<li>{retainedPct:3.1f}% of users upgraded to this version</li>".format(retainedPct=self.userRetentionByVersion[version]*100.0)
@@ -312,7 +364,7 @@ class SKUData:
         if self.promoCodesTotal > 0:
             summary += "<b>Promo Codes Used</b>          : {promoCodes:6}".format(promoCodes=self.newPromoCodesTotal)
             summary += "<br>"
-        summary += "<b>Proceeds</b>            : {proceeds:6.02f}".format(proceeds=self.newProceedsTotal)
+        summary += "<b>Proceeds</b>            : {proceeds}".format(proceeds=self.newProceedsTotalString)
         summary += "<br>"
         summary += "<b>Updates</b>             : {updates:6}".format(updates=self.newUpdatesTotal)
         summary += "<br>"
@@ -335,7 +387,7 @@ class SKUData:
         if self.numberOfNewRatings > 0:
             summary += "    New Ratings         : {newRatings:6}".format(newRatings=self.numberOfNewRatings)
         summary += "\r\n"
-        summary += "    Proceeds            : {proceeds:6.02f}".format(proceeds=self.newProceedsTotal)
+        summary += "    Proceeds            : {proceeds}".format(proceeds=self.newProceedsTotalString)
         summary += "\r\n"
         summary += "    Updates             : {updates:6}".format(updates=self.newUpdatesTotal)
         summary += "\r\n"
@@ -355,7 +407,7 @@ class SKUData:
         if self.lifetimeRatingSamples > 0:
             print "    Lifetime Avg Rating : {avgRating:6.01f}".format(avgRating=self.lifetimeAverageRating)
             print "    Number of Ratings   : {ratingCount:6}".format(ratingCount=self.lifetimeRatingSamples)
-        print "    Proceeds            : {proceeds:6.02f}".format(proceeds=self.proceedsTotal)
+        print "    Proceeds            : {proceeds}".format(proceeds=self.proceedsTotalString)
         print "    Users Not on Latest : {legacyUsers:3.01f}%".format(legacyUsers=self.legacyUserPercentage)
         
         if reportType == ReportTypes.DetailedSummary:
@@ -368,7 +420,7 @@ class SKUData:
                 print "        Updates          : {updates:6} units".format(updates=self.updatesByVersion[version])
                 if self.promoCodesByVersion[version] > 0:
                     print "        Promo Codes Used : {promoCodes:6}".format(promoCodes=self.promoCodesByVersion[version])
-                print "        Proceeds         : {proceeds:6.02f}".format(proceeds=self.proceedsByVersion[version])
+                print "        Proceeds         : {proceeds}".format(proceeds=self.proceedsByVersionString[version])
                 if version in self.userRetentionByVersion:
                     print "        Users Retained   : {retainedPct:3.1f}% of existing users upgraded to this version".format(retainedPct=self.userRetentionByVersion[version]*100.0)
                 if self.numberOfRatingsPerVersion[version] > 0:
@@ -409,18 +461,26 @@ class SKUData:
         
         self.Graphs.update({"AllInstallsAndUpdates":fileName})
 
-    def saveProceedsGraph(self, basePath, proceeds, entryDates):
+    def saveProceedsGraph(self, basePath, proceeds, currencyCode, entryDates):
         barWidth = 0.7
         barIndices = np.arange(len(entryDates))
+
+        # build the proceeds for this currency code        
+        workingProceeds = []
+        for dailyProceeds in proceeds:
+            if currencyCode in dailyProceeds:
+                workingProceeds.append(dailyProceeds[currencyCode])
+            else:
+                workingProceeds.append(0)
     
-        maxY = math.ceil(max(proceeds)) + 1
+        maxY = math.ceil(max(workingProceeds)) + 1
     
         figure, unitsGraph = plt.subplots()
-        proceedsRects = unitsGraph.bar(barIndices, proceeds, barWidth, color='g')
+        proceedsRects = unitsGraph.bar(barIndices, workingProceeds, barWidth, color='g')
         plt.ylim(ymax=maxY, ymin=0)
     
-        unitsGraph.set_ylabel("Amount Earned")
-        unitsGraph.set_title("Proceeds for {name}".format(name=self.Name))
+        unitsGraph.set_ylabel("Amount Earned {code}".format(code=currencyCode))
+        unitsGraph.set_title("Proceeds for {name} in {code}".format(name=self.Name, code=currencyCode))
         unitsGraph.set_xticks(barIndices+barWidth)
         unitsGraph.set_xticklabels(entryDates, rotation=-90)
     
@@ -432,12 +492,12 @@ class SKUData:
 
         autolabel(proceedsRects)
     
-        fileName = os.path.join(basePath, self.SKU + "_Proceeds.png")
+        fileName = os.path.join(basePath, self.SKU + "_Proceeds_{code}.png".format(code=currencyCode))
         plt.savefig(fileName,bbox_inches='tight',dpi=100)
         plt.clf()
         plt.cla()
         
-        self.Graphs.update({"Proceeds":fileName})
+        self.Graphs.update({"Proceeds_{code}".format(code=currencyCode):fileName})
     
     def generateAndSaveCountryInstallsChart(self, fileName, title, countries, installs):
         for countryIdx in range(0, len(countries)):
@@ -506,8 +566,10 @@ class SKUData:
             else:
                 installs.append(0)
                 updates.append(0)
-                proceeds.append(0)
+                proceeds.append(dict())
     
         self.saveUnitsGraph(basePath, installs, updates, entryDates)
-        self.saveProceedsGraph(basePath, proceeds, entryDates)
         self.saveCountryDistributionGraphs(basePath)
+        
+        for currencyCode in self.proceedsTotal.keys():
+            self.saveProceedsGraph(basePath, proceeds, currencyCode, entryDates)

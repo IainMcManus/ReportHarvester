@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# Harvest Reports v0.1.3
+# Harvest Reports v0.1.4
 # Copyright (c) 2014 Iain McManus. All rights reserved.
 #
 # Harvest Reports is a wrapper around Apple's AutoIngestion Java Class.
@@ -95,6 +95,7 @@ class SalesReportFile:
                     if fieldName == "Country Code" and len(fieldRemapper.ProductTypeFromCode) > 0:
                         fieldValue = fieldRemapper.CountryFromCode[fieldValue]
                     if fieldName == "Currency of Proceeds" and len(fieldRemapper.CountryFromCode) > 0:
+                        extractedLine.update({"Currency Code of Proceeds": fieldValue})
                         fieldValue = fieldRemapper.CurrencyFromCode[fieldValue]
                     if fieldName == "Promo Code" and len(fieldRemapper.PromoTypeFromCode) > 0:
                         fieldValue = fieldRemapper.PromoTypeFromCode[fieldValue]
