@@ -95,10 +95,10 @@ class SKUData:
         for [isNewData, reportLine] in self.rawData:
             if self.SKU == "Unknown" and len(reportLine["SKU"].strip()) > 0:
                 self.SKU = reportLine["SKU"].strip()
-            if self.Name == "Unknown" and len(reportLine["Title"].strip()) > 0:
-                self.Name = reportLine["Title"].strip()
             if self.AppId == "Unknown" and len(reportLine["Apple Identifier"].strip()) > 0:
                 self.AppId = reportLine["Apple Identifier"].strip()
+            
+            self.Name = reportLine["Title"].strip()
             
             startDate = reportLine["Begin Date"]
             
@@ -320,8 +320,8 @@ class SKUData:
             report += "<li><b>{version}</b>".format(version=version)
             report += "<ul>"
             
-            report += "<li>{installed:6} installs</li>".format(installed=self.unitsByVersion[version])
-            report += "<li>{updates:6} installs updated to this version</li>".format(updates=self.updatesByVersion[version])
+            report += "<li>{installed:6} new users</li>".format(installed=self.unitsByVersion[version])
+            report += "<li>{updates:6} existing users updated to this version</li>".format(updates=self.updatesByVersion[version])
             if self.promoCodesByVersion[version] > 0:
                 report += "<li>{promoCodes:6} promo codes used for this version</li>".format(promoCodes=self.promoCodesByVersion[version])
             report += "<li>{proceeds} earned from this version</li>".format(proceeds=self.proceedsByVersionString[version])
