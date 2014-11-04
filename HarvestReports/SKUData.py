@@ -247,10 +247,6 @@ class SKUData:
                 if len(self.proceedsByDateString[date]) > 0:
                     self.proceedsByDateString[date] += ", "
                 self.proceedsByDateString[date] += "{amount} {code}".format(amount=self.proceedsByDate[date][currency], code=currency)
-                
-                if version not in self.proceedsByVersion:
-                    self.proceedsByVersion.update({version, dict()})
-                self.proceedsByVersion[version][proceedsCurrency] = self.proceedsByVersion[version].setdefault(proceedsCurrency, 0) + proceeds
 
         # format the proceeds by version string
         self.proceedsByVersionString = dict()
@@ -288,10 +284,12 @@ class SKUData:
         if self.numberOfNewRatings > 0:
             print "    New Ratings         : {newRatings:6}".format(newRatings=self.numberOfNewRatings)
             
-        if self.promoCodesTotal > 0:
+        if self.newPromoCodesTotal > 0:
             print "    Promo Codes Used    : {promoCodes:6}".format(promoCodes=self.newPromoCodesTotal)
-        print "    Proceeds            : {proceeds}".format(proceeds=self.newProceedsTotalString)
-        print "    Updates             : {updates:6}".format(updates=self.newUpdatesTotal)
+        if self.newPaidInstallsTotal > 0:
+			print "    Proceeds            : {proceeds}".format(proceeds=self.newProceedsTotalString)
+        if self.newUpdatesTotal > 0:
+			print "    Updates             : {updates:6}".format(updates=self.newUpdatesTotal)
         
     def getReport_HTML(self):
         report = "<p><h1>Sales Report for {name}</h1></p>".format(name=self.Name)
@@ -302,7 +300,7 @@ class SKUData:
         if self.allInstallsTotal > 0:
             report += "<p><b>Total Installs</b>      : {units:6}</p>".format(units=self.allInstallsTotal)
         
-        if self.promoCodesTotal > 0:
+        if self.newPromoCodesTotal > 0:
             report += "<p><b>Promo Codes Used</b>    : {promoCodes:6}</p>".format(promoCodes=self.promoCodesTotal)
         if self.lifetimeRatingSamples > 0:
             report += "<b>Lifetime Avg Rating</b>       : {avgRating:6.01f}".format(avgRating=self.lifetimeAverageRating)
@@ -310,7 +308,8 @@ class SKUData:
             report += "<b>Number of Ratings</b>         : {ratingCount:6}".format(ratingCount=self.lifetimeRatingSamples)
             report += "<br>"
             
-        report += "<p><b>Proceeds</b>            : {proceeds}</p>".format(proceeds=self.proceedsTotalString)
+        if self.newPaidInstallsTotal > 0:
+			report += "<p><b>Proceeds</b>            : {proceeds}</p>".format(proceeds=self.proceedsTotalString)
         report += "<p><b>Users Not on Latest</b> : {legacyUsers:3.01f}%</p>".format(legacyUsers=self.legacyUserPercentage)
 
         report += "<p><h2>Version Breakdown</h2></p>"
