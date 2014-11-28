@@ -301,7 +301,7 @@ class SKUData:
             
         if self.newPromoCodesTotal > 0:
             print "    Promo Codes Used    : {promoCodes:6}".format(promoCodes=self.newPromoCodesTotal)
-        if self.newPaidInstallsTotal > 0:
+        if len(self.newProceedsTotalString) > 0:
             print "    Proceeds            : {proceeds}".format(proceeds=self.newProceedsTotalString)
         if self.newUpdatesTotal > 0:
             print "    Updates             : {updates:6}".format(updates=self.newUpdatesTotal)
@@ -317,7 +317,7 @@ class SKUData:
         if self.refundsTotal > 0:
             report += "<p><b>Refunds Total</b>       : {units:6}</p>".format(units=self.refundsTotal)
         
-        if self.newPromoCodesTotal > 0:
+        if self.promoCodesTotal > 0:
             report += "<p><b>Promo Codes Used</b>    : {promoCodes:6}</p>".format(promoCodes=self.promoCodesTotal)
         if self.lifetimeRatingSamples > 0:
             report += "<b>Lifetime Avg Rating</b>       : {avgRating:6.01f}".format(avgRating=self.lifetimeAverageRating)
@@ -336,13 +336,16 @@ class SKUData:
             report += "<li><b>{version}</b>".format(version=version)
             report += "<ul>"
             
-            report += "<li>{installed:6} new users</li>".format(installed=self.unitsByVersion[version])
-            report += "<li>{updates:6} existing users updated to this version</li>".format(updates=self.updatesByVersion[version])
+            if self.unitsByVersion[version] > 0:
+                report += "<li>{installed:6} new users</li>".format(installed=self.unitsByVersion[version])
+            if self.updatesByVersion[version] > 0:
+                report += "<li>{updates:6} existing users updated to this version</li>".format(updates=self.updatesByVersion[version])
             if self.refundsByVersion[version] > 0:
-                report += "<li>{refunds:6} refunds performed for this version<li>".format(refunds=self.refundsByVersion[version])
+                report += "<li>{refunds:6} refunds performed for this version</li>".format(refunds=self.refundsByVersion[version])
             if self.promoCodesByVersion[version] > 0:
                 report += "<li>{promoCodes:6} promo codes used for this version</li>".format(promoCodes=self.promoCodesByVersion[version])
-            report += "<li>{proceeds} earned from this version</li>".format(proceeds=self.proceedsByVersionString[version])
+            if len(self.proceedsByVersionString[version]) > 0:
+                report += "<li>{proceeds} earned from this version</li>".format(proceeds=self.proceedsByVersionString[version])
             
             if version in self.userRetentionByVersion:
                 report += "<li>{retainedPct:3.1f}% of users upgraded to this version</li>".format(retainedPct=self.userRetentionByVersion[version]*100.0)
@@ -382,13 +385,15 @@ class SKUData:
         if self.numberOfNewRatings > 0:
             summary += "<b>Number of New Ratings</b>         : {ratingCount:6}".format(ratingCount=self.numberOfNewRatings)
             summary += "<br>"
-        if self.promoCodesTotal > 0:
+        if self.newPromoCodesTotal > 0:
             summary += "<b>Promo Codes Used</b>          : {promoCodes:6}".format(promoCodes=self.newPromoCodesTotal)
             summary += "<br>"
-        summary += "<b>Proceeds</b>            : {proceeds}".format(proceeds=self.newProceedsTotalString)
-        summary += "<br>"
-        summary += "<b>Updates</b>             : {updates:6}".format(updates=self.newUpdatesTotal)
-        summary += "<br>"
+        if len(self.newProceedsTotalString) > 0:
+            summary += "<b>Proceeds</b>            : {proceeds}".format(proceeds=self.newProceedsTotalString)
+            summary += "<br>"
+        if self.newUpdatesTotal > 0:
+            summary += "<b>Updates</b>             : {updates:6}".format(updates=self.newUpdatesTotal)
+            summary += "<br>"
         
         return summary
     
