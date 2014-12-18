@@ -219,7 +219,7 @@ def analyseFeedEntries(feedEntries, newFeedEntries):
     # build up the average rating information for all time and per version
     for feedEntry in feedEntries.values():
         appVersion = feedEntry[RSSFields.Version]
-        appRating = feedEntry[RSSFields.Rating]
+        appRating = int(feedEntry[RSSFields.Rating])
         
         lifetimeAverageRating += appRating
         
@@ -319,9 +319,13 @@ def downloadRSSFeed(basePath, appIds, countryCodes):
             # load the previous set of feed entries
             previousFeedEntries = loadFeedFile(downloadedFeedSummary)
             
+            # the download has failed for some reason
+            if len(feed.entries) == 0:
+                feedEntries = previousFeedEntries
+            
             # identify new feed entries
             newFeedEntries = identifyNewFeedEntries(previousFeedEntries, feedEntries)
-            
+
             if len(newFeedEntries) > 0:
                 newRatingsAndReviews = True
             
