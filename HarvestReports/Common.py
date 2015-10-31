@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
-# Harvest Reports v0.1.3
-# Copyright (c) 2014 Iain McManus. All rights reserved.
+# Harvest Reports v0.1.5
+# Copyright (c) 2014-2015 Iain McManus. All rights reserved.
 #
 # Harvest Reports is a wrapper around Apple's AutoIngestion Java Class.
 # Harvest Reports can download all of the recent daily data and will produce

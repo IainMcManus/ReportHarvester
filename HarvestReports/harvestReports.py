@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
-# Harvest Reports v0.1.4
-# Copyright (c) 2014 Iain McManus. All rights reserved.
+# Harvest Reports v0.1.5
+# Copyright (c) 2014-2015 Iain McManus. All rights reserved.
 #
 # Harvest Reports is a wrapper around Apple's AutoIngestion Java Class.
 # Harvest Reports can download all of the recent daily data and will produce
@@ -468,10 +468,10 @@ def usage():
     print "          -c               List of country codes to download the rating and review data for"
 
 def main(argv):
-    print "Harvest Reports v0.1.4"
+    print "Harvest Reports v0.1.5"
     print "Written by Iain McManus"
     print ""
-    print "Copyright (c) 2014 Iain McManus. All rights reserved"
+    print "Copyright (c) 2014-2015 Iain McManus. All rights reserved"
     print ""
     
     propertiesFile = ""

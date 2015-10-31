@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
-# Harvest Reports v0.1.4
-# Copyright (c) 2014 Iain McManus. All rights reserved.
+# Harvest Reports v0.1.5
+# Copyright (c) 2014-2015 Iain McManus. All rights reserved.
 #
 # Harvest Reports is a wrapper around Apple's AutoIngestion Java Class.
 # Harvest Reports can download all of the recent daily data and will produce
@@ -36,27 +36,30 @@ import datetime
 
 class SalesReportFile:
     fields = [
-              ["Provider"],
-              ["Provider Country"],
-              ["SKU"],
-              ["Developer"],
-              ["Title"],
-              ["Version"],
-              ["Product Type Identifier"],
-              ["Units"],
-              ["Developer Proceeds (per item)"],
-              ["Begin Date"],
-              ["End Date"],
-              ["Customer Currency"],
-              ["Country Code"],
-              ["Currency of Proceeds"],
-              ["Apple Identifier"],
-              ["Customer Price"],
-              ["Promo Code"],
-              ["Parent Identifier"],
-              ["Subscription"],
-              ["Period"],
-              ["Category"]
+              ["Provider"],                         # 0
+              ["Provider Country"],                 # 1
+              ["SKU"],                              # 2
+              ["Developer"],                        # 3
+              ["Title"],                            # 4
+              ["Version"],                          # 5
+              ["Product Type Identifier"],          # 6
+              ["Units"],                            # 7
+              ["Developer Proceeds (per item)"],    # 8
+              ["Begin Date"],                       # 9
+              ["End Date"],                         #10
+              ["Customer Currency"],                #11
+              ["Country Code"],                     #12
+              ["Currency of Proceeds"],             #13
+              ["Apple Identifier"],                 #14
+              ["Customer Price"],                   #15
+              ["Promo Code"],                       #16 
+              ["Parent Identifier"],                #17
+              ["Subscription"],                     #18
+              ["Period"],                           #19
+              ["Category"],                         #20
+              ["CMB"],                              #21
+              ["Device"],                           #22
+              ["Supported Platforms"]               #23
              ]
 
     def __init__(self, reportFile, isNewFile, fieldRemapper):

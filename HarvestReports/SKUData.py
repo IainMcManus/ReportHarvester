@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
-# Harvest Reports v0.1.4
-# Copyright (c) 2014 Iain McManus. All rights reserved.
+# Harvest Reports v0.1.5
+# Copyright (c) 2014-2015 Iain McManus. All rights reserved.
 #
 # Harvest Reports is a wrapper around Apple's AutoIngestion Java Class.
 # Harvest Reports can download all of the recent daily data and will produce
@@ -488,8 +488,8 @@ class SKUData:
     
         fileName = os.path.join(basePath, self.SKU + "_AllInstallsAndUpdates.png")
         plt.savefig(fileName,bbox_inches='tight',dpi=100)
-        plt.clf()
-        plt.cla()
+        
+        plt.close('all')
         
         self.Graphs.update({"AllInstallsAndUpdates":fileName})
 
@@ -526,8 +526,8 @@ class SKUData:
     
         fileName = os.path.join(basePath, self.SKU + "_Proceeds_{code}.png".format(code=currencyCode))
         plt.savefig(fileName,bbox_inches='tight',dpi=100)
-        plt.clf()
-        plt.cla()
+        
+        plt.close('all')
         
         self.Graphs.update({"Proceeds_{code}".format(code=currencyCode):fileName})
     
@@ -546,8 +546,8 @@ class SKUData:
         plt.title(title)
     
         plt.savefig(fileName, bbox_inches='tight', dpi=100)
-        plt.clf()
-        plt.cla()
+        
+        plt.close('all')
 
     def saveCountryDistributionGraphs(self, basePath):
         reportList = dict();
